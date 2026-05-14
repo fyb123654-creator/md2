@@ -18,6 +18,12 @@ public class GameManager {
     private int playedCardsThisTurn;
     private boolean currentPlayerEndedTurn;
     private boolean gameStarted;
+    private PlayerManagement winner;
+    private Interactor interactor;
+    private boolean canSelectPropertyCard;
+    private boolean canSelectBankCard;
+    private final List<Card> selectedPropertyCardBuffer;
+    private final List<Card> selectedBankCardBuffer;
 
     public GameManager() {
         this.players = new ArrayList<>();
@@ -25,6 +31,11 @@ public class GameManager {
         this.playedCardsThisTurn = 0;
         this.currentPlayerEndedTurn = false;
         this.gameStarted = false;
+        this.winner = null;
+        this.canSelectPropertyCard = false;
+        this.canSelectBankCard = false;
+        this.selectedPropertyCardBuffer = new ArrayList<>();
+        this.selectedBankCardBuffer = new ArrayList<>();
     }
 
     public static CardManager createGameCardManager() {
@@ -42,6 +53,7 @@ public class GameManager {
         this.playedCardsThisTurn = 0;
         this.currentPlayerEndedTurn = false;
         this.gameStarted = false;
+        this.winner = null;
     }
 
     public int getPlayerCount() {
@@ -54,6 +66,73 @@ public class GameManager {
 
     public CardManager getCardManager() {
         return cardManager;
+    }
+
+    public void setInteractor(Interactor interactor) {
+        this.interactor = interactor;
+    }
+
+    public Interactor getInteractor() {
+        return interactor;
+    }
+
+    public boolean canSelectPropertyCard() {
+        return canSelectPropertyCard;
+    }
+
+    public void setCanSelectPropertyCard(boolean canSelectPropertyCard) {
+        this.canSelectPropertyCard = canSelectPropertyCard;
+        if (!canSelectPropertyCard) {
+            selectedPropertyCardBuffer.clear();
+        }
+    }
+
+    public boolean canSelectBankCard() {
+        return canSelectBankCard;
+    }
+
+    public void setCanSelectBankCard(boolean canSelectBankCard) {
+        this.canSelectBankCard = canSelectBankCard;
+        if (!canSelectBankCard) {
+            selectedBankCardBuffer.clear();
+        }
+    }
+
+    public List<Card> getSelectedPropertyCardBufferView() {
+        return Collections.unmodifiableList(selectedPropertyCardBuffer);
+    }
+
+    public List<Card> getSelectedBankCardBufferView() {
+        return Collections.unmodifiableList(selectedBankCardBuffer);
+    }
+
+    public void cacheSelectedPropertyCard(Card card) {
+        if (card == null) {
+            throw new IllegalArgumentException("card cannot be null");
+        }
+        if (!canSelectPropertyCard) {
+            return;
+        }
+        if (!selectedPropertyCardBuffer.contains(card)) {
+            selectedPropertyCardBuffer.add(card);
+        }
+    }
+
+    public void cacheSelectedBankCard(Card card) {
+        if (card == null) {
+            throw new IllegalArgumentException("card cannot be null");
+        }
+        if (!canSelectBankCard) {
+            return;
+        }
+        if (!selectedBankCardBuffer.contains(card)) {
+            selectedBankCardBuffer.add(card);
+        }
+    }
+
+    public void clearSelectedCardBuffers() {
+        selectedPropertyCardBuffer.clear();
+        selectedBankCardBuffer.clear();
     }
 
     public int getCurrentPlayerIndex() {
@@ -78,7 +157,15 @@ public class GameManager {
 
     public boolean canCurrentPlayerPlayCard() {
         ensureGameStarted();
-        return playedCardsThisTurn < MAX_PLAY_COUNT_PER_TURN;
+        return playedCardsThisTurn < MAX_PLAY_COUNT_PER_TURN && winner == null;
+    }
+
+    public PlayerManagement getWinner() {
+        return winner;
+    }
+
+    public boolean hasWinner() {
+        return winner != null;
     }
 
     public void prepareRound() {
@@ -122,35 +209,219 @@ public class GameManager {
         beginCurrentPlayerTurn();
     }
 
-    public void play(Card card, PlayTarget target, Color color) {
+    public void play(Card card, Color color) {
         ensureCanPlay();
         PlayerManagement currentPlayer = getCurrentPlayer();
         currentPlayer.playCard(card, cardManager);
-        switch (target) {
-            case ACTION -> handleActionCard(card);
-            case BANK -> handleMoneyCard(card, currentPlayer);
-            case PROPERTY -> handlePropertyCard(card, currentPlayer, color);
-            default -> throw new IllegalStateException("unsupported play target: " + target);
-        }
-
         playedCardsThisTurn++;
+        checkVictoryCondition();
     }
 
     public void playActionCard(Card card) {
-        play(card, PlayTarget.ACTION, null);
+        if (!(card instanceof ActionCard actionCard)) {
+            throw new IllegalArgumentException("card is not an action card: " + card.getName());
+        }
+        boolean completed = actionCard.execute(this);
+        if (!completed) {
+            return;
+        }
+        removeFromCurrentPlayerHand(card);
+        cardManager.playCard(card);
+        playedCardsThisTurn++;
+        checkVictoryCondition();
     }
 
-    public void depositMoneyCard(Card card) {
-        play(card, PlayTarget.BANK, null);
+    public PlayerManagement chooseTargetPlayerExcludingCurrent() {
+        ensureGameStarted();
+        if (interactor == null) {
+            throw new IllegalStateException("interactor is not set");
+        }
+        return interactor.choiceTargetPlayer(getCurrentPlayer(), getPlayersView());
     }
 
-    public void placePropertyCard(PropertyCard propertyCard, Color color) {
-        play(propertyCard, PlayTarget.PROPERTY, color);
+    public Card chooseStealablePropertyCard(PlayerManagement targetPlayer) {
+        ensureGameStarted();
+        if (targetPlayer == null) {
+            throw new IllegalArgumentException("targetPlayer cannot be null");
+        }
+        if (interactor == null) {
+            throw new IllegalStateException("interactor is not set");
+        }
+        return interactor.choiceStealablePropertyCard(targetPlayer);
+    }
+
+    public boolean stealPropertyCard(PlayerManagement targetPlayer, Card card) {
+        ensureGameStarted();
+        if (targetPlayer == null) {
+            throw new IllegalArgumentException("targetPlayer cannot be null");
+        }
+        if (card == null) {
+            throw new IllegalArgumentException("card cannot be null");
+        }
+        if (!(card instanceof PropertyCard)) {
+            throw new IllegalArgumentException("card is not a property card: " + card.getName());
+        }
+        if (targetPlayer.isSetComplete(findPropertyCardColor(targetPlayer, card))) {
+            return false;
+        }
+
+        if (tryCancelWithJustSayNo(targetPlayer, getCurrentPlayer(), "Sly Deal")) {
+            return false;
+        }
+
+        PlayerManagement currentPlayer = getCurrentPlayer();
+        Color color = findPropertyCardColor(targetPlayer, card);
+        if (color == null) {
+            return false;
+        }
+        if (!targetPlayer.removeFromPropertyZones(card)) {
+            return false;
+        }
+        currentPlayer.addProperty(color, (PropertyCard) card);
+        return true;
+    }
+
+    public boolean tryCancelWithJustSayNo(PlayerManagement targetPlayer, PlayerManagement sourcePlayer, String actionName) {
+        ensureGameStarted();
+        if (targetPlayer == null) {
+            throw new IllegalArgumentException("targetPlayer cannot be null");
+        }
+        if (sourcePlayer == null) {
+            throw new IllegalArgumentException("sourcePlayer cannot be null");
+        }
+        if (actionName == null || actionName.isBlank()) {
+            actionName = "action";
+        }
+
+        Card justSayNoCard = findJustSayNoCard(targetPlayer);
+        if (justSayNoCard == null || interactor == null) {
+            return false;
+        }
+
+        boolean shouldCancel = interactor.confirmJustSayNo(targetPlayer, sourcePlayer, actionName);
+        if (!shouldCancel) {
+            return false;
+        }
+
+        if (!targetPlayer.removeFromHand(justSayNoCard)) {
+            return false;
+        }
+        cardManager.playCard(justSayNoCard);
+        playedCardsThisTurn++;
+        checkVictoryCondition();
+        return true;
+    }
+
+    private Card findJustSayNoCard(PlayerManagement player) {
+        for (Card card : player.getHandCardsView()) {
+            if (card instanceof JustSayNoCard) {
+                return card;
+            }
+        }
+        return null;
     }
 
     public void removeFromCurrentPlayerHand(Card card) {
         ensureGameStarted();
         getCurrentPlayer().removeFromHand(card);
+    }
+
+    public void chargePlayer(PlayerManagement collector, PlayerManagement payer, int amount) {
+        if (collector == null) {
+            throw new IllegalArgumentException("collector cannot be null");
+        }
+        if (payer == null) {
+            throw new IllegalArgumentException("payer cannot be null");
+        }
+        if (amount < 0) {
+            throw new IllegalArgumentException("amount cannot be negative");
+        }
+        if (interactor == null) {
+            throw new IllegalStateException("interactor is not set");
+        }
+
+        if (tryCancelWithJustSayNo(payer, collector, "charge")) {
+            return;
+        }
+
+        int totalAssetValue = calculateAssetTotalValue(payer);
+
+        if (totalAssetValue < amount) {
+            transferAllAssetsToCollectorHand(collector, payer);
+            return;
+        }
+
+        List<Card> selectedCards = interactor.showSelectableAssets(payer, amount);
+        if (selectedCards.isEmpty()) {
+            return;
+        }
+
+        int selectedValue = 0;
+        for (Card card : selectedCards) {
+            selectedValue += card.getValue();
+        }
+        if (selectedValue < amount) {
+            throw new IllegalStateException("selected card total value is less than required amount");
+        }
+
+        for (Card card : selectedCards) {
+            if (payer.removeFromBank(card) || payer.removeFromPropertyZones(card)) {
+                collector.addToHand(card);
+            }
+        }
+    }
+
+    public void chargeAllOpponents(PlayerManagement collector, int amount) {
+        if (collector == null) {
+            throw new IllegalArgumentException("collector cannot be null");
+        }
+        if (amount < 0) {
+            throw new IllegalArgumentException("amount cannot be negative");
+        }
+        ensureGameStarted();
+
+        for (PlayerManagement player : players) {
+            if (player == collector) {
+                continue;
+            }
+            chargePlayer(collector, player, amount);
+        }
+    }
+
+    public int resolveRentAmountWithDoubleTheRent(PlayerManagement player, Color selectedColor, int baseRentAmount) {
+        ensureGameStarted();
+        if (player == null) {
+            throw new IllegalArgumentException("player cannot be null");
+        }
+        if (selectedColor == null) {
+            throw new IllegalArgumentException("selectedColor cannot be null");
+        }
+        if (baseRentAmount < 0) {
+            throw new IllegalArgumentException("baseRentAmount cannot be negative");
+        }
+
+        Card doubleTheRentCard = null;
+        for (Card handCard : player.getHandCardsView()) {
+            if (handCard instanceof DoubleTheRentCard) {
+                doubleTheRentCard = handCard;
+                break;
+            }
+        }
+
+        if (doubleTheRentCard == null || interactor == null) {
+            return baseRentAmount;
+        }
+
+        boolean useDouble = interactor.confirmUseDoubleTheRent(player, selectedColor, baseRentAmount);
+        if (!useDouble) {
+            return baseRentAmount;
+        }
+
+        if (!player.removeFromHand(doubleTheRentCard)) {
+            return baseRentAmount;
+        }
+        cardManager.playCard(doubleTheRentCard);
+        return baseRentAmount * 2;
     }
 
     private void beginCurrentPlayerTurn() {
@@ -163,18 +434,75 @@ public class GameManager {
         }
     }
 
+    private int calculateAssetTotalValue(PlayerManagement player) {
+        int total = 0;
 
-    private void handleActionCard(Card card) {
-        if (!card.isActionCard()) {
-            throw new IllegalArgumentException("card is not an action card: " + card.getName());
+        for (Card bankCard : player.getBankCardsView()) {
+            total += bankCard.getValue();
+        }
+
+        for (PropertyZone zone : player.getPropertyZonesView().values()) {
+            for (PropertyCard propertyCard : zone.getPropertiesView()) {
+                total += propertyCard.getValue();
+            }
+            if (zone.getHouse() != null) {
+                total += zone.getHouse().getValue();
+            }
+            if (zone.getHotel() != null) {
+                total += zone.getHotel().getValue();
+            }
+        }
+
+        return total;
+    }
+
+    private Color findPropertyCardColor(PlayerManagement player, Card card) {
+        for (java.util.Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
+            PropertyZone zone = entry.getValue();
+            if (zone.getPropertiesView().contains(card)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private void transferAllAssetsToCollectorHand(PlayerManagement collector, PlayerManagement payer) {
+        List<Card> bankCards = new ArrayList<>(payer.getBankCardsView());
+        for (Card card : bankCards) {
+            if (payer.removeFromBank(card)) {
+                collector.addToHand(card);
+            }
+        }
+
+        List<Card> propertyCards = new ArrayList<>();
+        for (PropertyZone zone : payer.getPropertyZonesView().values()) {
+            propertyCards.addAll(zone.getPropertiesView());
+            if (zone.getHouse() != null) {
+                propertyCards.add(zone.getHouse());
+            }
+            if (zone.getHotel() != null) {
+                propertyCards.add(zone.getHotel());
+            }
+        }
+
+        for (Card card : propertyCards) {
+            if (payer.removeFromPropertyZones(card)) {
+                collector.addToHand(card);
+            }
         }
     }
 
-    private void handleMoneyCard(Card card, PlayerManagement currentPlayer) {
+    public void depositMoneyCard(Card card) {
+        play(card, null);
+        PlayerManagement currentPlayer = getCurrentPlayer();
+        if (!card.canBeUsedAsMoney()) {
+            throw new IllegalArgumentException("card cannot be deposited as money: " + card.getName());
+        }
         currentPlayer.depositToBank(card);
     }
 
-    private void handlePropertyCard(Card card, PlayerManagement currentPlayer, Color color) {
+    public void placePropertyCard(Card card, PlayerManagement currentPlayer, Color color) {
+        play(card, color);
         if (!(card instanceof PropertyCard propertyCard)) {
             throw new IllegalArgumentException("card is not a property card: " + card.getName());
         }
@@ -200,8 +528,25 @@ public class GameManager {
 
     private void ensureCanPlay() {
         ensureGameStarted();
+        if (winner != null) {
+            throw new IllegalStateException("game has already ended");
+        }
         if (playedCardsThisTurn >= MAX_PLAY_COUNT_PER_TURN) {
             throw new IllegalStateException("current player has already played the maximum number of cards this turn");
+        }
+    }
+
+    private void checkVictoryCondition() {
+        if (winner != null) {
+            return;
+        }
+
+        for (PlayerManagement player : players) {
+            if (player.hasWon()) {
+                winner = player;
+                currentPlayerEndedTurn = true;
+                break;
+            }
         }
     }
 
@@ -218,6 +563,10 @@ public class GameManager {
         if (!gameStarted || currentPlayerIndex < 0 || currentPlayerIndex >= players.size()) {
             throw new IllegalStateException("game has not started");
         }
+    }
+
+    public boolean isGameOver() {
+        return winner != null;
     }
 
     private void ensurePlayerCountIsSet() {

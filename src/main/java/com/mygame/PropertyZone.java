@@ -42,5 +42,30 @@ public final class PropertyZone {
     public boolean isHasHotel() {
         return hasHotel;
     }
+
+    public boolean removeCard(Card card) {
+        if (card == null) {
+            throw new IllegalArgumentException("card cannot be null");
+        }
+
+        if (card instanceof PropertyCard propertyCard) {
+            return properties.remove(propertyCard);
+        }
+
+        if (card instanceof BuildingCard buildingCard) {
+            if (house == buildingCard) {
+                house = null;
+                hasHouse = false;
+                return true;
+            }
+            if (hotel == buildingCard) {
+                hotel = null;
+                hasHotel = false;
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 

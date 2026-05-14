@@ -32,8 +32,27 @@ public final class SlyDealCard implements ActionCard {
     }
 
     @Override
-    public void executeAction(Player source, Player target, GameState state) {
-        throw new UnsupportedOperationException("Action resolution should be implemented by game engine");
+    public boolean execute(GameManager gameManager) {
+        if (gameManager == null) {
+            throw new IllegalArgumentException("gameManager cannot be null");
+        }
+
+        PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
+        PlayerManagement targetPlayer = gameManager.chooseTargetPlayerExcludingCurrent();
+        if (targetPlayer == null) {
+            return false;
+        }
+
+        Card stealableCard = gameManager.chooseStealablePropertyCard(targetPlayer);
+        if (stealableCard == null) {
+            return false;
+        }
+
+        boolean success = gameManager.stealPropertyCard(targetPlayer, stealableCard);
+        if (!success) {
+            throw new IllegalStateException("failed to steal property card for " + currentPlayer.getName());
+        }
+        return true;
     }
 }
 

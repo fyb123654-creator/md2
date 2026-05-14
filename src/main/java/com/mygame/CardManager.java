@@ -132,16 +132,16 @@ public class CardManager {
     }
 
     private static void addActionCards(Card[] cards, int[] nextId) {
-        addSimpleActionCards(cards, nextId, "Deal Breaker", 5, 2);
-        addSimpleActionCards(cards, nextId, "Just Say No!", 4, 3);
-        addSimpleActionCards(cards, nextId, "Sly Deal", 3, 3);
-        addSimpleActionCards(cards, nextId, "Forced Deal", 3, 3);
-        addSimpleActionCards(cards, nextId, "Debt Collector", 3, 3);
-        addSimpleActionCards(cards, nextId, "It's My Birthday", 2, 3);
-        addSimpleActionCards(cards, nextId, "Pass Go", 1, 10);
-        addBuildingCards(cards, nextId, "House", 3, 3, 3);
-        addBuildingCards(cards, nextId, "Hotel", 4, 2, 4);
-        addSimpleActionCards(cards, nextId, "Double The Rent", 1, 2);
+        addDealBreakerCards(cards, nextId, 2);
+        addJustSayNoCards(cards, nextId, 3);
+        addSlyDealCards(cards, nextId, 3);
+        addForcedDealCards(cards, nextId, 3);
+        addDebtCollectorCards(cards, nextId, 3);
+        addItsMyBirthdayCards(cards, nextId, 3);
+        addPassGoCards(cards, nextId, 10);
+        addHouseCards(cards, nextId, 3);
+        addHotelCards(cards, nextId, 2);
+        addDoubleTheRentCards(cards, nextId, 2);
         addBiColorRent(cards, nextId, "Rent - Brown / Light Blue", 1, 2, Color.BROWN, Color.LIGHT_BLUE);
         addBiColorRent(cards, nextId, "Rent - Pink / Orange", 1, 2, Color.PINK, Color.ORANGE);
         addBiColorRent(cards, nextId, "Rent - Red / Yellow", 1, 2, Color.RED, Color.YELLOW);
@@ -182,15 +182,63 @@ public class CardManager {
         put(cards, nextId, new StandardPropertyCard(nextCardId(nextId), name, value, color, rents));
     }
 
-    private static void addSimpleActionCards(Card[] cards, int[] nextId, String name, int value, int count) {
+    private static void addDealBreakerCards(Card[] cards, int[] nextId, int count) {
         for (int i = 0; i < count; i++) {
-            put(cards, nextId, new SimpleActionCard(nextCardId(nextId), name, value));
+            put(cards, nextId, new DealBreakerCard(nextCardId(nextId), "Deal Breaker", 5));
         }
     }
 
-    private static void addBuildingCards(Card[] cards, int[] nextId, String name, int value, int count, int addedRent) {
+    private static void addJustSayNoCards(Card[] cards, int[] nextId, int count) {
         for (int i = 0; i < count; i++) {
-            put(cards, nextId, new BuildingCard(nextCardId(nextId), name, value, addedRent));
+            put(cards, nextId, new JustSayNoCard(nextCardId(nextId), "Just Say No!", 4));
+        }
+    }
+
+    private static void addSlyDealCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new SlyDealCard(nextCardId(nextId), "Sly Deal", 3));
+        }
+    }
+
+    private static void addForcedDealCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new ForcedDealCard(nextCardId(nextId), "Forced Deal", 3));
+        }
+    }
+
+    private static void addDebtCollectorCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new DebtCollectorCard(nextCardId(nextId), "Debt Collector", 3));
+        }
+    }
+
+    private static void addItsMyBirthdayCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new ItsMyBirthdayCard(nextCardId(nextId), "It's My Birthday", 2));
+        }
+    }
+
+    private static void addPassGoCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new PassGoCard(nextCardId(nextId), "Pass Go", 1));
+        }
+    }
+
+    private static void addDoubleTheRentCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new DoubleTheRentCard(nextCardId(nextId), "Double The Rent", 1, EnumSet.allOf(Color.class)));
+        }
+    }
+
+    private static void addHouseCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new HouseCard(nextCardId(nextId), "House", 3));
+        }
+    }
+
+    private static void addHotelCards(Card[] cards, int[] nextId, int count) {
+        for (int i = 0; i < count; i++) {
+            put(cards, nextId, new HotelCard(nextCardId(nextId), "Hotel", 4));
         }
     }
 

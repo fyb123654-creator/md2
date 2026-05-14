@@ -17,7 +17,8 @@ public final class MultiColorWildPropertyCard implements PropertyCard {
         this.id = id;
         this.name = name;
         this.value = value;
-        this.playableColors = EnumSet.noneOf(Color.class);
+        this.playableColors = EnumSet.allOf(Color.class);
+        this.playableColors.remove(Color.WILD);
         this.currentActiveColor = Color.WILD;
         this.rentValues = Map.copyOf(rentValues);
     }

@@ -32,8 +32,35 @@ public final class MultiColorWildRentCard implements ActionCard {
     }
 
     @Override
-    public void executeAction(Player source, Player target, GameState state) {
-        throw new UnsupportedOperationException("Wild rent resolution should be implemented by game engine");
+    public boolean execute(GameManager gameManager) {
+        if (gameManager == null) {
+            throw new IllegalArgumentException("gameManager cannot be null");
+        }
+
+        PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
+        Interactor interactor = gameManager.getInteractor();
+        if (interactor == null) {
+            throw new IllegalStateException("interactor is not set");
+        }
+
+        PropertyZone selectedZone = interactor.choicePropertyZone(currentPlayer);
+        if (selectedZone == null) {
+            return false;
+        }
+
+        Color selectedColor = selectedZone.getColor();
+        int rentAmount = currentPlayer.getRent(selectedColor);
+        if (rentAmount <= 0) {
+            throw new IllegalStateException("该颜色当前无可收取租金");
+        }
+
+        PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
+        if (targetPlayer == null) {
+            return false;
+        }
+
+        gameManager.chargePlayer(currentPlayer, targetPlayer, rentAmount);
+        return true;
     }
 }
 

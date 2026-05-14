@@ -1,7 +1,7 @@
 package com.mygame;
 
 public interface ActionCard extends Card {
-    void executeAction(Player source, Player target, GameState state);
+    boolean execute(GameManager gameManager);
 
     @Override
     default boolean isActionCard() {

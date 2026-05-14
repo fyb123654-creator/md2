@@ -9,5 +9,6 @@ public interface RentCard extends ActionCard {
     default CardType getCardType() {
         return CardType.RENT_BICOLOR;
     }
+    
 }
 

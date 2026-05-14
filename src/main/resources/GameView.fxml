@@ -2,42 +2,56 @@
 
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<!-- 注意这里的 fx:controller 要换成你实际 GameController 所在的包名 -->
 <BorderPane xmlns="http://javafx.com/javafx"
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.mygame.GameController"
             prefHeight="720.0" prefWidth="1280.0">
 
-    <!-- 顶部：显示银行区和物业区 -->
     <top>
-        <VBox spacing="10" style="-fx-padding: 12px; -fx-background-color: #f8f8f8;">
-            <Label text="我的银行区"/>
-            <HBox fx:id="myBankBox" alignment="CENTER_LEFT" spacing="10"/>
-
-            <Label text="我的物业区"/>
-            <HBox fx:id="myPropertyBox" alignment="CENTER_LEFT" spacing="10"/>
-        </VBox>
+        <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED">
+            <content>
+                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: #f8f8f8;">
+                    <Label text="Other Players" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+                    <VBox fx:id="opponentAreaBox" spacing="12"/>
+                </VBox>
+            </content>
+        </ScrollPane>
     </top>
 
-    <!-- 中间：显示回合信息 -->
     <center>
-        <VBox alignment="CENTER" spacing="20">
-            <Label fx:id="turnInfoLabel" text="游戏尚未开始" style="-fx-font-size: 24px;"/>
-            <Button fx:id="endTurnButton" text="结束回合" onAction="#onEndTurnClicked" style="-fx-font-size: 18px;"/>
+        <VBox alignment="CENTER" spacing="18" style="-fx-padding: 18px;">
+            <Label fx:id="turnInfoLabel" text="Game not started" style="-fx-font-size: 24px;"/>
+            <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" style="-fx-font-size: 18px; -fx-padding: 10 22; -fx-background-color: linear-gradient(#ffcd72, #f0a93b); -fx-text-fill: #2b2b2b; -fx-font-weight: bold; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #c9851f;"/>
+            <HBox fx:id="handActionBox" alignment="CENTER_LEFT" spacing="14" style="-fx-padding: 0 0 0 0;"/>
         </VBox>
     </center>
 
-    <!-- 底部：显示玩家手牌 -->
     <bottom>
-        <VBox alignment="CENTER" spacing="10" style="-fx-padding: 20px; -fx-background-color: #f0f0f0;">
-            <Label text="我的手牌"/>
-            <!-- myHandBox 用于在 Java 代码中动态添加卡牌按钮 -->
-            <HBox fx:id="myHandBox" alignment="CENTER" spacing="10"/>
-        </VBox>
+        <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER">
+            <content>
+                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: #f0f0f0;">
+                    <VBox spacing="8">
+                        <Label text="My Hand" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+                        <HBox fx:id="myHandBox" alignment="CENTER_LEFT" spacing="10"/>
+                    </VBox>
+
+                    <VBox spacing="8">
+                        <Label text="My Bank Area" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+                        <HBox fx:id="myBankBox" alignment="CENTER_LEFT" spacing="10"/>
+                    </VBox>
+
+                    <VBox spacing="8">
+                        <Label text="My Property Area" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
+                        <HBox fx:id="myPropertyBox" alignment="CENTER_LEFT" spacing="10"/>
+                    </VBox>
+                </VBox>
+            </content>
+        </ScrollPane>
     </bottom>
 
 </BorderPane>

@@ -40,8 +40,35 @@ public final class BiColorRentCard implements ActionCard {
     }
 
     @Override
-    public void executeAction(Player source, Player target, GameState state) {
-        throw new UnsupportedOperationException("Rent resolution should be implemented by game engine");
+    public boolean execute(GameManager gameManager) {
+        if (gameManager == null) {
+            throw new IllegalArgumentException("gameManager cannot be null");
+        }
+
+        PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
+        Interactor interactor = gameManager.getInteractor();
+        if (interactor == null) {
+            throw new IllegalStateException("interactor is not set");
+        }
+
+        PropertyZone selectedZone = interactor.choicePropertyZone(currentPlayer);
+        if (selectedZone == null) {
+            return false;
+        }
+
+        Color selectedColor = selectedZone.getColor();
+        if (!validColors.contains(selectedColor)) {
+            throw new IllegalStateException("所选房产颜色不符合该租金牌可收费颜色: " + selectedColor);
+        }
+
+        int rentAmount = currentPlayer.getRent(selectedColor);
+        if (rentAmount <= 0) {
+            throw new IllegalStateException("该颜色当前无可收取租金");
+        }
+
+        rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
+        gameManager.chargeAllOpponents(currentPlayer, rentAmount);
+        return true;
     }
 }
 

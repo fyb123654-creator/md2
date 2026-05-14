@@ -32,7 +32,7 @@ public class SimpleActionCard implements ActionCard {
     }
 
     @Override
-    public void executeAction(Player source, Player target, GameState state) {
+    public boolean execute(GameManager gameManager) {
         throw new UnsupportedOperationException("Action resolution should be implemented by game engine");
     }
 }

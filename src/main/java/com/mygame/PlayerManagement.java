@@ -65,6 +65,11 @@ public class PlayerManagement {
         return Collections.unmodifiableList(bankCards);
     }
 
+    public boolean removeFromBank(Card card) {
+        validateCard(card);
+        return bankCards.remove(card);
+    }
+
     public int getBankTotalValue() {
         int total = 0;
         for (Card card : bankCards) {
@@ -77,14 +82,30 @@ public class PlayerManagement {
         return Collections.unmodifiableMap(propertyZones);
     }
 
+    public boolean removeFromPropertyZones(Card card) {
+        validateCard(card);
+
+        for (Map.Entry<Color, PropertyZone> entry : propertyZones.entrySet()) {
+            PropertyZone zone = entry.getValue();
+            if (zone.removeCard(card)) {
+                // 清理空分区，避免 UI 显示“(空)”残留
+                if (zone.getPropertiesView().isEmpty() && zone.getHouse() == null && zone.getHotel() == null) {
+                    propertyZones.remove(entry.getKey());
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void addToHand(Card card) {
         validateCard(card);
         handCards.add(card);
     }
 
-    public void removeFromHand(Card card) {
+    public boolean removeFromHand(Card card) {
         validateCard(card);
-        handCards.remove(card);
+        return handCards.remove(card);
     }
 
     public boolean canDiscardToHandLimit() {
@@ -188,10 +209,22 @@ public class PlayerManagement {
             throw new IllegalArgumentException("color cannot be null");
         }
 
-        int required = REQUIRED_SET_SIZE.getOrDefault(color, Integer.MAX_VALUE);
+        return getPropertyCount(color) >= getRequiredSetSize(color);
+    }
+
+    public int getPropertyCount(Color color) {
+        if (color == null) {
+            throw new IllegalArgumentException("color cannot be null");
+        }
         PropertyZone zone = propertyZones.get(color);
-        int currentCount = zone == null ? 0 : zone.properties.size();
-        return currentCount >= required;
+        return zone == null ? 0 : zone.properties.size();
+    }
+
+    public int getRequiredSetSize(Color color) {
+        if (color == null) {
+            throw new IllegalArgumentException("color cannot be null");
+        }
+        return REQUIRED_SET_SIZE.getOrDefault(color, Integer.MAX_VALUE);
     }
 
     public int getCompleteSetCount() {

@@ -1,6 +1,6 @@
 package com.mygame;
 
-public final class BuildingCard implements PropertyCard {
+public final class BuildingCard implements ActionCard {
     private final String id;
     private final String name;
     private final int value;
@@ -34,8 +34,8 @@ public final class BuildingCard implements PropertyCard {
     }
 
     @Override
-    public java.util.Set<Color> getPlayableColors() {
-        return java.util.Set.of();
+    public boolean execute(GameManager gameManager) {
+        throw new UnsupportedOperationException("Action resolution should be implemented by game engine");
     }
 
     public int getAddedRentValue() {
