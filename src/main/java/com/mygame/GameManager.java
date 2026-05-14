@@ -456,7 +456,7 @@ public class GameManager {
         return total;
     }
 
-    private Color findPropertyCardColor(PlayerManagement player, Card card) {
+    public Color findPropertyCardColor(PlayerManagement player, Card card) {
         for (java.util.Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
             PropertyZone zone = entry.getValue();
             if (zone.getPropertiesView().contains(card)) {
@@ -581,4 +581,3 @@ public class GameManager {
         }
     }
 }
-
