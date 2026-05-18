@@ -90,7 +90,19 @@ public class GameController {
 
     // Render bank cards
     private void renderBankCards(PlayerManagement player) {
-        renderCardButtonRow(myBankBox, player.getBankCardsView(), false);
+        myBankBox.getChildren().clear();
+        for (Card card : player.getBankCardsView()) {
+            CardView cardView = new CardView(card, true);
+            cardView.setDisable(true);
+            cardView.setOnAction(event -> handleBankCardClick(card));
+            myBankBox.getChildren().add(cardView);
+        }
+
+        if (myBankBox.getChildren().isEmpty()) {
+            Label emptyView = new Label("No cards");
+            emptyView.setStyle("-fx-text-fill: #666666;");
+            myBankBox.getChildren().add(emptyView);
+        }
     }
 
     // Render property cards
@@ -117,34 +129,26 @@ public class GameController {
             boolean hasAnyCard = false;
             for (PropertyCard propertyCard : zone.getPropertiesView()) {
                 hasAnyCard = true;
-                propertyRow.getChildren().add(createCardButton(
-                        propertyCard.getName() + "(" + propertyCard.getValue() + "M)",
-                        false,
-                        event -> handlePropertyCardClick(propertyCard),
-                        "-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color) + "; -fx-border-color: " + toFxColor(color) + ";"
-                ));
+                CardView cardView = new CardView(propertyCard, true);
+                cardView.setDisable(true);
+                cardView.setOnAction(event -> handlePropertyCardClick(propertyCard));
+                propertyRow.getChildren().add(cardView);
             }
 
             if (zone.getHouse() != null) {
                 hasAnyCard = true;
                 BuildingCard house = zone.getHouse();
-                propertyRow.getChildren().add(createCardButton(
-                        "House(" + house.getValue() + "M)",
-                        false,
-                        event -> handlePropertyCardClick(house),
-                        "-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color) + "; -fx-border-color: " + toFxColor(color) + ";"
-                ));
+                CardView cardView = new CardView(house, true);
+                cardView.setDisable(true);
+                propertyRow.getChildren().add(cardView);
             }
 
             if (zone.getHotel() != null) {
                 hasAnyCard = true;
                 BuildingCard hotel = zone.getHotel();
-                propertyRow.getChildren().add(createCardButton(
-                        "Hotel(" + hotel.getValue() + "M)",
-                        false,
-                        event -> handlePropertyCardClick(hotel),
-                        "-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color) + "; -fx-border-color: " + toFxColor(color) + ";"
-                ));
+                CardView cardView = new CardView(hotel, true);
+                cardView.setDisable(true);
+                propertyRow.getChildren().add(cardView);
             }
 
             if (!hasAnyCard) {
@@ -344,12 +348,9 @@ public class GameController {
     private void renderCardButtonRow(HBox targetBox, List<Card> cards, boolean allowCurrentPlayerHandActions) {
         targetBox.getChildren().clear();
         for (Card card : cards) {
-            Button cardView = createCardButton(
-                    card.getName() + "(" + card.getValue() + "M)",
-                    allowCardClick(card, allowCurrentPlayerHandActions),
-                    event -> handleCardClick(card),
-                    "-fx-padding: 6 10; -fx-background-color: #ffffff; -fx-border-color: #c9c9c9;"
-            );
+            CardView cardView = new CardView(card);
+            cardView.setDisable(!allowCardClick(card, allowCurrentPlayerHandActions));
+            cardView.setOnAction(event -> handleCardClick(card));
             targetBox.getChildren().add(cardView);
         }
 
@@ -372,17 +373,14 @@ public class GameController {
 
         HBox bankRow = new HBox(8);
         bankRow.setAlignment(Pos.CENTER_LEFT);
-        bankRow.getChildren().add(new Label("Bank area:"));
+        bankRow.getChildren().add(new Label("Bank:"));
         if (player.getBankCardsView().isEmpty()) {
             bankRow.getChildren().add(new Label("None"));
         } else {
             for (Card bankCard : player.getBankCardsView()) {
-                bankRow.getChildren().add(createCardButton(
-                        bankCard.getName() + "(" + bankCard.getValue() + "M)",
-                        false,
-                        event -> { },
-                        "-fx-padding: 6 10; -fx-background-color: #fff7d6; -fx-border-color: #d8c37a;"
-                ));
+                CardView cardView = new CardView(bankCard, true);
+                cardView.setDisable(true);
+                bankRow.getChildren().add(cardView);
             }
         }
 
@@ -395,42 +393,29 @@ public class GameController {
             PropertyZone zone = entry.getValue();
             int requiredCount = player.getRequiredSetSize(color);
             int currentCount = player.getPropertyCount(color);
-            String propertyStyle = "-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color)
-                    + "; -fx-border-color: " + toFxColor(color) + ";";
-            propertyRow.getChildren().add(createCardButton(
-                    "[" + color.name() + "] " + currentCount + "/" + requiredCount,
-                    false,
-                    event -> { },
-                    propertyStyle
-            ));
+            Label colorLabel = new Label("[" + color.name() + "] " + currentCount + "/" + requiredCount);
+            colorLabel.setStyle("-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color)
+                    + "; -fx-border-color: " + toFxColor(color) + "; -fx-border-radius: 6; -fx-font-weight: bold;");
+            propertyRow.getChildren().add(colorLabel);
             for (PropertyCard propertyCard : zone.getPropertiesView()) {
                 hasProperty = true;
-                propertyRow.getChildren().add(createCardButton(
-                        "[" + color.name() + "] " + propertyCard.getName() + "(" + propertyCard.getValue() + "M)",
-                        false,
-                        event -> { },
-                        propertyStyle
-                ));
+                CardView cardView = new CardView(propertyCard, true);
+                cardView.setDisable(true);
+                propertyRow.getChildren().add(cardView);
             }
             if (zone.getHouse() != null) {
                 hasProperty = true;
                 BuildingCard house = zone.getHouse();
-                propertyRow.getChildren().add(createCardButton(
-                        "[" + color.name() + "] House(" + house.getValue() + "M)",
-                        false,
-                        event -> { },
-                        propertyStyle
-                ));
+                CardView cardView = new CardView(house, true);
+                cardView.setDisable(true);
+                propertyRow.getChildren().add(cardView);
             }
             if (zone.getHotel() != null) {
                 hasProperty = true;
                 BuildingCard hotel = zone.getHotel();
-                propertyRow.getChildren().add(createCardButton(
-                        "[" + color.name() + "] Hotel(" + hotel.getValue() + "M)",
-                        false,
-                        event -> { },
-                        propertyStyle
-                ));
+                CardView cardView = new CardView(hotel, true);
+                cardView.setDisable(true);
+                propertyRow.getChildren().add(cardView);
             }
             if (!zone.getPropertiesView().isEmpty() || zone.getHouse() != null || zone.getHotel() != null) {
                 hasProperty = true;
@@ -444,13 +429,7 @@ public class GameController {
         return container;
     }
 
-    private Button createCardButton(String text, boolean enabled, javafx.event.EventHandler<javafx.event.ActionEvent> handler, String style) {
-        Button button = new Button(text);
-        button.setStyle(style);
-        button.setDisable(!enabled);
-        button.setOnAction(handler);
-        return button;
-    }
+    // CardView组件已替代此方法
 
     private String toFxColor(Color color) {
         return switch (color) {
