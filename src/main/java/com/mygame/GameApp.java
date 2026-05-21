@@ -79,6 +79,7 @@ public class GameApp extends Application {
             System.out.println("FXML loaded successfully");
 
             NetworkGameController controller = loader.getController();
+            controller.setGameApp(this);
             System.out.println("Controller loaded");
             
             primaryStage.setOnCloseRequest(e -> controller.cleanup());
@@ -90,6 +91,42 @@ public class GameApp extends Application {
             System.out.println("Online mode window displayed");
         } catch (Exception e) {
             System.out.println("Error loading online mode: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // 联机模式连接成功后调用，切换到游戏界面
+    public void startOnlineGame(boolean isHost, int playerIndex, int playerCount, GameServer gameServer, GameClient gameClient) {
+        System.out.println("startOnlineGame called: isHost=" + isHost
+                + ", playerIndex=" + playerIndex
+                + ", playerCount=" + playerCount
+                + ", gameServer=" + (gameServer != null ? "set" : "NULL")
+                + ", gameClient=" + (gameClient != null ? "set" : "NULL"));
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/GameView.fxml"));
+            Parent root = loader.load();
+
+            GameController controller = loader.getController();
+            System.out.println("GameController loaded, setting online mode...");
+            // 先设置联机模式，再初始化游戏
+            controller.setOnlineMode(true, playerIndex);
+            controller.setGameServer(gameServer);
+            controller.setGameClient(gameClient);
+            // 只有 Host 需要初始化游戏，Client 等待服务器状态
+            if (isHost) {
+                System.out.println("Host: calling initializeGame(" + playerCount + ")");
+                controller.initializeGame(playerCount);
+            } else {
+                System.out.println("Client: skipping initializeGame, waiting for server state");
+            }
+
+            Scene scene = new Scene(root, 1280, 720);
+            primaryStage.setTitle("Monopoly Deal - Online Game");
+            primaryStage.setScene(scene);
+            primaryStage.show();
+            System.out.println("Online game started - Player " + (playerIndex + 1));
+        } catch (Exception e) {
+            System.out.println("Error starting online game: " + e.getMessage());
             e.printStackTrace();
         }
     }

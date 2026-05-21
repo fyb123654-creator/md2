@@ -43,16 +43,20 @@
 
     <!-- 游戏区域 -->
     <HBox fx:id="gameArea" spacing="15" visible="false">
-        <VBox spacing="10" prefWidth="600">
-            <!-- 回合信息 -->
-            <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+        <!-- 回合信息 -->
+        <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
 
-            <!-- 游戏区域占位 -->
-            <Label text="Game board will appear here" style="-fx-text-fill: #999;"/>
+        <!-- 游戏区域占位 -->
+        <Label text="Game board will appear here" style="-fx-text-fill: #999;"/>
 
-            <!-- 结束回合按钮 -->
-            <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked"
-                    style="-fx-padding: 10 25; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #f44336; -fx-text-fill: white; -fx-border-radius: 8; -fx-background-radius: 8;"/>
-        </VBox>
+        <!-- 结束回合按钮 -->
+        <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked"
+                style="-fx-padding: 10 25; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #f44336; -fx-text-fill: white; -fx-border-radius: 8; -fx-background-radius: 8;"/>
     </HBox>
+
+    <!-- 玩家信息显示 -->
+    <VBox fx:id="playerInfoBox" spacing="10" visible="false">
+        <Label text="Players:" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+        <HBox fx:id="playerListBox" spacing="10"/>
+    </VBox>
 </VBox>

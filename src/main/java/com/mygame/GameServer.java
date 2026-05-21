@@ -7,6 +7,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -56,24 +57,25 @@ public class GameServer {
                     Socket clientSocket = serverSocket.accept();
                     System.out.println("New client connected: " + clientSocket.getInetAddress());
                     
-                    if (clients.size() >= expectedPlayerCount) {
+                    if (clients.size() >= expectedPlayerCount - 1) {
                         ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
                         out.writeObject(NetworkProtocol.connectAck(false, "Game is full"));
                         out.flush();
                         clientSocket.close();
                         continue;
                     }
-                    
-                    ClientHandler handler = new ClientHandler(clientSocket, clients.size());
+
+                    // Host 占据 index 0，远程客户端从 1 开始
+                    ClientHandler handler = new ClientHandler(clientSocket, clients.size() + 1);
                     clients.add(handler);
                     executorService.submit(handler);
-                    
+
                     if (listener != null) {
-                        listener.onClientConnected("Player " + (clients.size()));
+                        listener.onClientConnected("Player " + (clients.size() + 1));
                     }
-                    
-                    // 检查是否所有玩家都已连接
-                    if (clients.size() == expectedPlayerCount) {
+
+                    // Host 占 1 个位置，远程客户端需要 expectedPlayerCount - 1 个
+                    if (clients.size() == expectedPlayerCount - 1) {
                         startGame();
                     }
                     
@@ -88,12 +90,9 @@ public class GameServer {
 
     private void startGame() {
         System.out.println("All players connected, starting game...");
-        gameManager.startRound();
-        
-        // 通知所有客户端游戏开始
-        broadcast(NetworkProtocol.gameStart(expectedPlayerCount));
-        broadcastGameState();
-        
+
+        // 只通知 Host 所有玩家就位，不广播消息（客户端输出流可能尚未就绪）
+        // Host 在 initializeGame 中设置 GameManager 后会广播 gameStart 和初始状态
         if (listener != null) {
             listener.onGameStarted();
         }
@@ -143,6 +142,10 @@ public class GameServer {
         return gameManager;
     }
 
+    public void setGameManager(GameManager gameManager) {
+        this.gameManager = gameManager;
+    }
+
     /**
      * 客户端处理器
      */
@@ -188,20 +191,102 @@ public class GameServer {
                 case CONNECT:
                     System.out.println("Player " + (playerIndex + 1) + " connected");
                     break;
-                    
+
                 case PLAYER_ACTION:
-                    // 处理玩家操作
-                    System.out.println("Player " + (playerIndex + 1) + " action: " + message.getContent());
-                    // 这里需要解析并执行操作
+                    processPlayerAction(message.getContent());
                     break;
-                    
+
                 case CHAT_MESSAGE:
                     // 转发聊天消息
                     broadcast(NetworkProtocol.chat(message.getPlayerId(), message.getContent()));
                     break;
-                    
+
                 default:
                     System.out.println("Unknown message type: " + message.getType());
+            }
+        }
+
+        private void processPlayerAction(String action) {
+            System.out.println("Player " + (playerIndex + 1) + " action: " + action);
+
+            // 只处理当前回合玩家的操作
+            if (gameManager.getCurrentPlayerIndex() != playerIndex) {
+                send(NetworkProtocol.error("It's not your turn!"));
+                return;
+            }
+
+            try {
+                if ("END_TURN".equals(action)) {
+                    gameManager.confirmCurrentPlayerTurnEnded();
+                    if (gameManager.canAdvanceTurn()) {
+                        gameManager.advanceTurn();
+                    }
+                    broadcastGameState();
+                    return;
+                }
+
+                // 解析格式: "ACTION:cardId"
+                int colonIdx = action.indexOf(':');
+                if (colonIdx <= 0) {
+                    send(NetworkProtocol.error("Invalid action format: " + action));
+                    return;
+                }
+
+                String actionType = action.substring(0, colonIdx);
+                String cardId = action.substring(colonIdx + 1);
+
+                // 从当前玩家手牌中找到真实 Card 对象
+                PlayerManagement currentPlayer = gameManager.getPlayersView().get(playerIndex);
+                Card targetCard = null;
+                for (Card c : currentPlayer.getHandCardsView()) {
+                    if (c.getId().equals(cardId)) {
+                        targetCard = c;
+                        break;
+                    }
+                }
+
+                if (targetCard == null) {
+                    send(NetworkProtocol.error("Card not found: " + cardId));
+                    return;
+                }
+
+                switch (actionType) {
+                    case "DEPOSIT":
+                        gameManager.depositMoneyCard(targetCard);
+                        break;
+
+                    case "PLAY_ACTION":
+                        if (!(targetCard instanceof ActionCard)) {
+                            send(NetworkProtocol.error("Not an action card"));
+                            return;
+                        }
+                        gameManager.playActionCard(targetCard);
+                        break;
+
+                    case "PLACE_PROPERTY":
+                        if (!(targetCard instanceof PropertyCard propertyCard)) {
+                            send(NetworkProtocol.error("Not a property card"));
+                            return;
+                        }
+                        Set<Color> colors = propertyCard.getPlayableColors();
+                        if (colors == null || colors.isEmpty()) {
+                            send(NetworkProtocol.error("No playable colors"));
+                            return;
+                        }
+                        Color selectedColor = colors.iterator().next();
+                        gameManager.placePropertyCard(propertyCard, currentPlayer, selectedColor);
+                        break;
+
+                    default:
+                        send(NetworkProtocol.error("Unknown action: " + actionType));
+                        return;
+                }
+
+                broadcastGameState();
+
+            } catch (Exception e) {
+                send(NetworkProtocol.error("Action failed: " + e.getMessage()));
+                e.printStackTrace();
             }
         }
 

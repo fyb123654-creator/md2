@@ -158,6 +158,45 @@ public class GameStateData implements Serializable {
             }
             return data;
         }
+        
+        public Card toCard() {
+            CardType type = CardType.valueOf(cardType);
+
+            // 创建匿名 Card 实现
+            return new Card() {
+                @Override
+                public String getId() {
+                    return cardId;
+                }
+
+                @Override
+                public String getName() {
+                    return name;
+                }
+
+                @Override
+                public int getValue() {
+                    return value;
+                }
+
+                @Override
+                public CardType getCardType() {
+                    return type;
+                }
+
+                @Override
+                public boolean isActionCard() {
+                    return type == CardType.ACTION || type == CardType.BUILDING;
+                }
+
+                @Override
+                public boolean isPropertyCard() {
+                    return type == CardType.PROPERTY_STANDARD
+                            || type == CardType.PROPERTY_WILD_BICOLOR
+                            || type == CardType.PROPERTY_WILD_MULTICOLOR;
+                }
+            };
+        }
 
         // Getters and Setters
         public String getCardId() { return cardId; }
@@ -216,4 +255,3 @@ public class GameStateData implements Serializable {
         public void setHotel(CardData hotel) { this.hotel = hotel; }
     }
 }
-
