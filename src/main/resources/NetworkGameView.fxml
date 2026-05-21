@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.mygame.NetworkGameController" style="-fx-padding: 15; -fx-spacing: 15;">
+
+    <!-- 标题 -->
+    <Label text="Monopoly Deal - Online Mode" style="-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #2f4f6f;"/>
+
+    <!-- 主面板 -->
+    <VBox fx:id="mainPanel" spacing="12">
+        <!-- 服务器地址 -->
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Label text="Server Address:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
+            <TextField fx:id="serverAddressField" prefWidth="200" promptText="Enter server IP"/>
+        </HBox>
+
+        <!-- 端口 -->
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Label text="Port:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
+            <TextField fx:id="portField" prefWidth="100" promptText="12345"/>
+        </HBox>
+
+        <!-- 玩家数量 -->
+        <HBox spacing="10" alignment="CENTER_LEFT">
+            <Label text="Player Count:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
+            <TextField fx:id="playerCountField" prefWidth="100" promptText="2-5"/>
+        </HBox>
+
+        <!-- 按钮 -->
+        <HBox spacing="15" alignment="CENTER">
+            <Button fx:id="hostButton" text="Create Game" onAction="#onHostButtonClicked"
+                    style="-fx-padding: 12 30; -fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: linear-gradient(#4CAF50, #45a049); -fx-text-fill: white; -fx-border-radius: 10; -fx-background-radius: 10;"/>
+            <Button fx:id="joinButton" text="Join Game" onAction="#onJoinButtonClicked"
+                    style="-fx-padding: 12 30; -fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: linear-gradient(#2196F3, #1976D2); -fx-text-fill: white; -fx-border-radius: 10; -fx-background-radius: 10;"/>
+        </HBox>
+
+        <!-- 状态标签 -->
+        <Label fx:id="statusLabel" text="Ready to connect..." style="-fx-font-size: 14px; -fx-text-fill: #666;"/>
+    </VBox>
+
+    <!-- 游戏区域 -->
+    <HBox fx:id="gameArea" spacing="15" visible="false">
+        <VBox spacing="10" prefWidth="600">
+            <!-- 回合信息 -->
+            <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+
+            <!-- 游戏区域占位 -->
+            <Label text="Game board will appear here" style="-fx-text-fill: #999;"/>
+
+            <!-- 结束回合按钮 -->
+            <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked"
+                    style="-fx-padding: 10 25; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #f44336; -fx-text-fill: white; -fx-border-radius: 8; -fx-background-radius: 8;"/>
+        </VBox>
+    </HBox>
+</VBox>
