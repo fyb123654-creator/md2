@@ -3,7 +3,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.mygame.OnlineGameController" style="-fx-padding: 10; -fx-spacing: 10;">
+<VBox xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.mygame.ui.OnlineGameController" style="-fx-padding: 10; -fx-spacing: 10;">
 
     <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;" />
 
