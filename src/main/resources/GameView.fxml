@@ -7,10 +7,16 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<BorderPane xmlns="http://javafx.com/javafx"
+<!-- Root ScrollPane improves small-screen usability -->
+<ScrollPane xmlns="http://javafx.com/javafx"
             xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com.mygame.GameController"
+            fx:controller="com.mygame.ui.GameController"
+            fitToWidth="true"
+            hbarPolicy="AS_NEEDED"
+            vbarPolicy="AS_NEEDED"
             prefHeight="720.0" prefWidth="1280.0">
+    <content>
+        <BorderPane prefHeight="720.0" prefWidth="1280.0">
 
     <top>
         <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED">
@@ -54,4 +60,6 @@
         </ScrollPane>
     </bottom>
 
-</BorderPane>
+        </BorderPane>
+    </content>
+</ScrollPane>
