@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.mygame.ui.OnlineGameController" style="-fx-padding: 10; -fx-spacing: 10;">
+
+    <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;" />
+
+    <VBox fx:id="opponentAreaBox" style="-fx-padding: 10; -fx-background-color: #f5f5f5; -fx-border-radius: 8;" />
+
+    <VBox spacing="10">
+        <Label text="My Hand:" style="-fx-font-size: 14px; -fx-font-weight: bold;" />
+        <HBox fx:id="myHandBox" style="-fx-padding: 10; -fx-background-color: #ffffff; -fx-border-color: #ddd; -fx-border-radius: 8;" />
+
+        <HBox fx:id="handActionBox" spacing="10" alignment="CENTER" />
+
+        <Label text="Bank:" style="-fx-font-size: 14px; -fx-font-weight: bold;" />
+        <HBox fx:id="myBankBox" style="-fx-padding: 10; -fx-background-color: #ffffff; -fx-border-color: #ddd; -fx-border-radius: 8;" />
+
+        <Label text="Properties:" style="-fx-font-size: 14px; -fx-font-weight: bold;" />
+        <HBox fx:id="myPropertyBox" style="-fx-padding: 10; -fx-background-color: #ffffff; -fx-border-color: #ddd; -fx-border-radius: 8;" />
+    </VBox>
+
+    <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked"
+            style="-fx-padding: 12 30; -fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: #f44336; -fx-text-fill: white; -fx-border-radius: 10;" />
+</VBox>

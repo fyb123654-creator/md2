@@ -1,0 +1,96 @@
+.root {
+  -fx-font-family: "Segoe UI", "Arial";
+  -fx-background-color: #f6f7fb;
+}
+
+.label {
+  -fx-text-fill: #1f2a37;
+}
+
+.button {
+  -fx-padding: 10 18;
+  -fx-font-size: 14px;
+  -fx-font-weight: bold;
+  -fx-background-radius: 10;
+  -fx-border-radius: 10;
+  -fx-background-color: linear-gradient(#ffffff, #f3f4f6);
+  -fx-border-color: #cbd5e1;
+  -fx-text-fill: #1f2a37;
+  -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.10), 10, 0.25, 0, 2);
+}
+
+.button.primary {
+  -fx-background-color: linear-gradient(#66a6ff, #3b82f6);
+  -fx-border-color: #1d4ed8;
+  -fx-text-fill: white;
+}
+
+.button.success {
+  -fx-background-color: linear-gradient(#34d399, #22c55e);
+  -fx-border-color: #15803d;
+  -fx-text-fill: white;
+}
+
+.button.danger {
+  -fx-background-color: linear-gradient(#ff5a5f, #f44336);
+  -fx-border-color: #c62828;
+  -fx-text-fill: white;
+}
+
+.button.primary:hover {
+  -fx-background-color: linear-gradient(#7ab6ff, #4f93ff);
+}
+
+.button.success:hover {
+  -fx-background-color: linear-gradient(#48e0ab, #2fd06b);
+}
+
+.button:disabled {
+  -fx-opacity: 0.55;
+  -fx-background-color: linear-gradient(#e5e7eb, #d1d5db);
+  -fx-border-color: #cbd5e1;
+  -fx-text-fill: #475569;
+  -fx-effect: none;
+}
+
+.hint {
+  -fx-text-fill: #475569;
+  -fx-font-size: 13px;
+}
+
+.hint.important {
+  -fx-text-fill: #1d4ed8;
+  -fx-font-weight: bold;
+}
+
+.button:pressed {
+  -fx-translate-y: 1;
+  -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 6, 0.25, 0, 1);
+}
+
+.scroll-pane {
+  -fx-background: transparent;
+  -fx-background-color: transparent;
+}
+
+.player-card {
+  -fx-background-color: #ffffff;
+  -fx-border-color: #e5e7eb;
+  -fx-border-width: 2;
+  -fx-border-radius: 12;
+  -fx-background-radius: 12;
+  -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 12, 0.2, 0, 3);
+}
+
+.player-card.current-turn {
+  -fx-border-color: #3b82f6;
+  -fx-effect: dropshadow(gaussian, rgba(59,130,246,0.35), 18, 0.35, 0, 0);
+}
+
+.chip {
+  -fx-padding: 6 10;
+  -fx-background-color: #ffffff;
+  -fx-border-color: #d9d9d9;
+  -fx-border-radius: 10;
+  -fx-background-radius: 10;
+}
