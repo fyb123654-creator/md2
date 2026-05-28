@@ -150,7 +150,11 @@ public class PlayerManagement {
         if (propertyCard == null) {
             throw new IllegalArgumentException("propertyCard cannot be null");
         }
+        if (!propertyCard.getPlayableColors().contains(color)) {
+            throw new IllegalArgumentException("property card cannot be used as " + color);
+        }
 
+        setActiveColorIfSupported(propertyCard, color);
         PropertyZone zone = propertyZones.computeIfAbsent(color, c -> new PropertyZone(c));
         zone.properties.add(propertyCard);
     }
@@ -221,16 +225,18 @@ public class PlayerManagement {
         }
 
         if (lowerName.contains("house")) {
+            if (color == Color.RAILROAD || color == Color.UTILITY) {
+                throw new IllegalStateException("house cannot be placed on railroad or utility set: " + color);
+            }
             if (zone.house != null) {
                 throw new IllegalStateException("house already exists in set: " + color);
             }
-            if (!isSetComplete(color)) {
-                throw new IllegalStateException("cannot add house to incomplete set: " + color);
-            }
-        zone.house = buildingCard;
-        zone.hasHouse = true;
-        return;
+            zone.house = buildingCard;
+            zone.hasHouse = true;
+            return;
         }
+
+        throw new IllegalArgumentException("unknown building card: " + buildingCard.getName());
     }
     public int getRent(Color color) {
         if (color == null) {

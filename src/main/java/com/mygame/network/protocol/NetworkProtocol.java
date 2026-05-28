@@ -48,7 +48,7 @@ public class NetworkProtocol implements Serializable {
     public static NetworkProtocol connectAck(boolean success, String message) {
         NetworkProtocol msg = new NetworkProtocol();
         msg.type = MessageType.CONNECT_ACK;
-        msg.content = success ? "OK" : "ERROR: " + message;
+        msg.content = success ? "OK:" + message : "ERROR: " + message;
         return msg;
     }
 

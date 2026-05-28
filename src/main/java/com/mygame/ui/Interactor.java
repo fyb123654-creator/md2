@@ -24,7 +24,12 @@ public class Interactor {
         Dialog<List<Card>> dialog = new Dialog<>();
         dialog.setTitle("Select Assets");
         dialog.setHeaderText("Select assets of " + targetPlayer.getName() + " (multiple selection)");
-        dialog.setOnCloseRequest(event -> event.consume());
+        final boolean[] allowDialogClose = {false};
+        dialog.setOnCloseRequest(event -> {
+            if (!allowDialogClose[0]) {
+                event.consume();
+            }
+        });
 
         ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
         dialog.getDialogPane().getButtonTypes().add(confirmButtonType);
@@ -95,6 +100,13 @@ public class Interactor {
 
         Node confirmButton = dialog.getDialogPane().lookupButton(confirmButtonType);
         confirmButton.setDisable(requiredAmount > 0);
+        confirmButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            if (confirmButton.isDisable()) {
+                event.consume();
+                return;
+            }
+            allowDialogClose[0] = true;
+        });
 
         Runnable refreshSelectionState = () -> {
             int total = 0;
@@ -241,6 +253,78 @@ public class Interactor {
                 zoneList.getChildren().add(box);
             }
         }
+        content.getChildren().add(zoneList);
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefViewportHeight(360);
+        dialog.getDialogPane().setContent(scrollPane);
+
+        Node confirmButton = dialog.getDialogPane().lookupButton(confirmButtonType);
+        confirmButton.setDisable(true);
+
+        for (CheckBox currentBox : zoneCheckMap.keySet()) {
+            currentBox.selectedProperty().addListener((obs, oldV, newV) -> {
+                if (newV) {
+                    for (CheckBox otherBox : zoneCheckMap.keySet()) {
+                        if (otherBox != currentBox) otherBox.setSelected(false);
+                    }
+                }
+                boolean hasSelection = zoneCheckMap.keySet().stream().anyMatch(CheckBox::isSelected);
+                confirmButton.setDisable(!hasSelection);
+            });
+        }
+
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == confirmButtonType) {
+                for (Map.Entry<CheckBox, PropertyZone> e : zoneCheckMap.entrySet()) {
+                    if (e.getKey().isSelected()) return e.getValue();
+                }
+            }
+            return null;
+        });
+
+        Optional<PropertyZone> result = dialog.showAndWait();
+        return result.orElse(null);
+    }
+
+    public PropertyZone choiceBuildingPropertyZone(PlayerManagement player, Card buildingCard) {
+        if (player == null) throw new IllegalArgumentException("player cannot be null");
+        if (buildingCard == null) throw new IllegalArgumentException("buildingCard cannot be null");
+
+        boolean isHouse = buildingCard.getName() != null && buildingCard.getName().toLowerCase().contains("house");
+        boolean isHotel = buildingCard.getName() != null && buildingCard.getName().toLowerCase().contains("hotel");
+
+        Dialog<PropertyZone> dialog = new Dialog<>();
+        dialog.setTitle("Choose property set");
+        dialog.setHeaderText("Select a complete set for " + buildingCard.getName());
+
+        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+
+        VBox content = new VBox(10);
+        content.setPrefWidth(520);
+        Map<CheckBox, PropertyZone> zoneCheckMap = new LinkedHashMap<>();
+
+        VBox zoneList = new VBox(6);
+        for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
+            Color color = entry.getKey();
+            PropertyZone zone = entry.getValue();
+            if (!player.isSetComplete(color)) continue;
+            if (isHouse && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() != null)) continue;
+            if (isHotel && zone.getHotel() != null) continue;
+
+            String label = "[" + color.name() + "] (properties: " + zone.getPropertiesView().size()
+                    + (zone.getHouse() != null ? ", House" : "")
+                    + (zone.getHotel() != null ? ", Hotel" : "") + ")";
+            CheckBox box = new CheckBox(label);
+            zoneCheckMap.put(box, zone);
+            zoneList.getChildren().add(box);
+        }
+
+        if (zoneCheckMap.isEmpty()) {
+            zoneList.getChildren().add(new Label("(No valid complete set for this building)"));
+        }
+
         content.getChildren().add(zoneList);
         ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);

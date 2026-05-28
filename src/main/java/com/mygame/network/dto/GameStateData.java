@@ -3,6 +3,7 @@ package com.mygame.network.dto;
 import com.mygame.cards.base.Card;
 import com.mygame.cards.base.CardType;
 import com.mygame.cards.property.BiColorWildPropertyCard;
+import com.mygame.cards.property.BuildingCard;
 import com.mygame.cards.property.MultiColorWildPropertyCard;
 import com.mygame.cards.property.PropertyCard;
 import com.mygame.cards.property.StandardPropertyCard;
@@ -153,6 +154,7 @@ public class GameStateData implements Serializable {
         private int value;
         private String cardType;
         private String color;
+        private int addedRentValue;
 
         public CardData() {}
 
@@ -167,6 +169,10 @@ public class GameStateData implements Serializable {
             data.value = card.getValue();
 
             data.cardType = card.getCardType().name();
+
+            if (card instanceof BuildingCard buildingCard) {
+                data.addedRentValue = buildingCard.getAddedRentValue();
+            }
 
             if (card instanceof StandardPropertyCard spc) {
 
@@ -214,6 +220,10 @@ public class GameStateData implements Serializable {
         private static transient List<Card> referenceDeck = null;
 
         public Card toCard() {
+            if (CardType.BUILDING.name().equals(cardType) && addedRentValue > 0) {
+                return new BuildingCard(cardId, name, value, addedRentValue);
+            }
+
             if (referenceDeck == null) {
                 referenceDeck = GameManager.createGameCardManager().getDrawPileView();
             }
@@ -284,6 +294,8 @@ public class GameStateData implements Serializable {
         public void setCardType(String cardType) { this.cardType = cardType; }
         public String getColor() { return color; }
         public void setColor(String color) { this.color = color; }
+        public int getAddedRentValue() { return addedRentValue; }
+        public void setAddedRentValue(int addedRentValue) { this.addedRentValue = addedRentValue; }
     }
 
     /**

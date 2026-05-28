@@ -21,7 +21,12 @@
 
         <HBox spacing="10" alignment="CENTER_LEFT">
             <Label text="Player Count:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
-            <TextField fx:id="playerCountField" prefWidth="100" promptText="2-5"/>
+            <HBox fx:id="playerCountButtonBox" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
+                <Button fx:id="playerCount2Button" text="2 Players" onAction="#onPlayerCount2Clicked"/>
+                <Button fx:id="playerCount3Button" text="3 Players" onAction="#onPlayerCount3Clicked"/>
+                <Button fx:id="playerCount4Button" text="4 Players" onAction="#onPlayerCount4Clicked"/>
+                <Button fx:id="playerCount5Button" text="5 Players" onAction="#onPlayerCount5Clicked"/>
+            </HBox>
         </HBox>
 
         <HBox spacing="15" alignment="CENTER">

@@ -51,6 +51,8 @@ public class GameController {
     @FXML
     private VBox opponentAreaBox;
     @FXML
+    private Label clientInfoLabel;
+    @FXML
     private Label turnInfoLabel;
     @FXML
     private Button endTurnButton;
@@ -193,10 +195,8 @@ public class GameController {
         }
         endTurnButton.setDisable(!isMyTurn);
 
-        // Update turn info
-        turnInfoLabel.setText("Current turn: Player " + (state.getCurrentPlayerIndex() + 1)
-                + (isMyTurn ? " (You)" : "")
-                + " | Cards: " + state.getPlayedCardsThisTurn() + "/" + state.getMaxPlayCountPerTurn());
+        updateClientInfo();
+        turnInfoLabel.setText("Plays: " + state.getPlayedCardsThisTurn() + "/" + state.getMaxPlayCountPerTurn());
 
         // New turn: clear selection
         if (!wasMyTurn && isMyTurn) {
@@ -298,7 +298,10 @@ public class GameController {
             colorGroup.setPadding(new Insets(8));
             colorGroup.setStyle("-fx-background-color: #fafafa; -fx-border-color: #d9d9d9; -fx-border-radius: 8; -fx-background-radius: 8;");
 
-            Label colorTitle = new Label(color.name());
+            PlayerManagement localPlayer = gameManager != null && localPlayerIndex < gameManager.getPlayersView().size()
+                    ? gameManager.getPlayersView().get(localPlayerIndex)
+                    : null;
+            Label colorTitle = new Label(buildPropertySetTitle(localPlayer, color, zoneData.getProperties().size()));
             colorTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + toFxColor(color) + ";");
             colorGroup.getChildren().add(colorTitle);
 
@@ -380,7 +383,10 @@ public class GameController {
             for (var entry : playerData.getPropertyZones().entrySet()) {
                 Color color = entry.getKey();
                 GameStateData.PropertyZoneData zoneData = entry.getValue();
-                Label colorLabel = new Label("[" + color.name() + "]");
+                PlayerManagement player = gameManager != null && i < gameManager.getPlayersView().size()
+                        ? gameManager.getPlayersView().get(i)
+                        : null;
+                Label colorLabel = new Label("[" + buildPropertySetTitle(player, color, zoneData.getProperties().size()) + "]");
                 colorLabel.setStyle("-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color)
                         + "; -fx-border-color: " + toFxColor(color) + "; -fx-border-radius: 6; -fx-font-weight: bold;");
                 propertyRow.getChildren().add(colorLabel);
@@ -405,6 +411,7 @@ public class GameController {
     private void updateUI() {
         // Online client may not have a local GameManager; keep UI in sync via DTO only
         if (isOnlineMode && !isHost() && gameManager == null) {
+            updateClientInfo();
             turnInfoLabel.setText("Waiting for server...");
             return;
         }
@@ -415,8 +422,8 @@ public class GameController {
                 ? gameManager.getPlayersView().get(localPlayerIndex)
                 : currentPlayer;
 
-        turnInfoLabel.setText("Current turn: " + currentPlayer.getName() +
-                " | Remaining plays: " + gameManager.getRemainingPlayCountThisTurn());
+        updateClientInfo();
+        turnInfoLabel.setText("Remaining plays: " + gameManager.getRemainingPlayCountThisTurn());
         renderOpponentArea(localPlayer);
         renderHandCards(localPlayer);
         renderBankCards(localPlayer);
@@ -474,14 +481,13 @@ public class GameController {
         for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
             Color color = entry.getKey();
             PropertyZone zone = entry.getValue();
-            int requiredCount = player.getRequiredSetSize(color);
             int currentCount = player.getPropertyCount(color);
 
             VBox colorGroup = new VBox(8);
             colorGroup.setPadding(new Insets(8));
             colorGroup.setStyle("-fx-background-color: #fafafa; -fx-border-color: #d9d9d9; -fx-border-radius: 8; -fx-background-radius: 8;");
 
-            Label colorTitle = new Label(color.name() + "  " + currentCount + "/" + requiredCount);
+            Label colorTitle = new Label(buildPropertySetTitle(player, color, currentCount));
             colorTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + toFxColor(color) + ";");
             colorGroup.getChildren().add(colorTitle);
 
@@ -627,19 +633,15 @@ public class GameController {
 
         // Add additional options based on card type
         if (isRentCard(selectedHandCard)) {
-            if (selectedHandCard instanceof BiColorRentCard) {
-                buttons.add(createActionOptionButton(getBiColorRentSwitchText(selectedHandCard), () -> switchBiColorRentColor(selectedHandCard)));
-            }
-            buttons.add(createActionOptionButton("Play rent card", () -> chooseOnlineRentCardMode(selectedHandCard)));
+            buttons.add(createActionOptionButton("Play as action card", () -> sendPlayAction(selectedHandCard)));
+            buttons.add(createActionOptionButton("Deposit to Bank", () -> sendDepositAction(selectedHandCard)));
         } else {
             buttons.add(createActionOptionButton("Deposit to Bank", () -> sendDepositAction(selectedHandCard)));
             if (selectedHandCard.isActionCard()) {
                 if (selectedHandCard instanceof DoubleTheRentCard) {
-                showError("Double The Rent cannot be played alone! Use it with a Rent card.");
-                } else if (selectedHandCard instanceof JustSayNoCard) {
-                showError("Just Say No cannot be played actively.");
+                    showError("Double The Rent cannot be played alone! Use it with a Rent card.");
                 } else {
-                buttons.add(createActionOptionButton("Play as action card", () -> sendPlayAction(selectedHandCard)));
+                    buttons.add(createActionOptionButton("Play as action card", () -> sendPlayAction(selectedHandCard)));
                 }
             } else if (selectedHandCard.isPropertyCard()) {
                 buttons.add(createActionOptionButton("Place as property", () -> sendPlacePropertyAction(selectedHandCard)));
@@ -670,6 +672,7 @@ public class GameController {
         String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + targetCard.getId();
         sendActionToServer(actionStr);
 
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -703,6 +706,7 @@ public class GameController {
         String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + myCard.getId() + ":" + targetCard.getId();
         sendActionToServer(actionStr);
 
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -744,6 +748,7 @@ public class GameController {
 
         // 3) No-parameter action cards
         sendActionToServer("PLAY_ACTION:" + card.getId());
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -751,13 +756,10 @@ public class GameController {
     private void handleOnlineRent(Card rentCard) {
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
-        Color selectedColor;
+        Color selectedColor = promptForRentColor(rentCard, currentPlayer);
+        if (selectedColor == null) return;
         if (rentCard instanceof BiColorRentCard biColorRentCard) {
-            selectedColor = biColorRentCard.getSelectedColor();
-        } else {
-            PropertyZone zone = interactor.choicePropertyZone(currentPlayer);
-            if (zone == null) return;
-            selectedColor = zone.getColor();
+            biColorRentCard.setSelectedColor(selectedColor);
         }
 
         if (currentPlayer.getRent(selectedColor) <= 0) {
@@ -776,7 +778,7 @@ public class GameController {
 
         // 3) Ask whether to stack it
         String doubleCardId = "NONE";
-        if (doubleCard != null) {
+        if (doubleCard != null && gameManager.getRemainingPlayCountThisTurn() >= 2) {
             Alert alert = new Alert(
                     Alert.AlertType.CONFIRMATION,
                     "You have a Double The Rent card. Play it together to double this rent?",
@@ -803,6 +805,7 @@ public class GameController {
             sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":BI_RENT:" + selectedColor.name() + ":" + doubleCardId);
         }
 
+        removeCardFromHandUI(rentCard);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -811,24 +814,14 @@ public class GameController {
     private void handleOnlineBuilding(Card buildingCard) {
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
-        PropertyZone zone = interactor.choicePropertyZone(currentPlayer);
+        PropertyZone zone = interactor.choiceBuildingPropertyZone(currentPlayer, buildingCard);
         if (zone == null) return;
         Color selectedColor = zone.getColor();
-
-        if (buildingCard instanceof HouseCard) {
-            if (selectedColor == Color.RAILROAD || selectedColor == Color.UTILITY) {
-                showError("House cannot be placed on Railroad/Utility sets");
-                return;
-            }
-        }
-        if (!currentPlayer.isSetComplete(selectedColor)) {
-            showError("You must complete the set before placing a house/hotel");
-            return;
-        }
 
         // PLAY_ACTION:<cardId>:BUILDING:<color>
         sendActionToServer("PLAY_ACTION:" + buildingCard.getId() + ":BUILDING:" + selectedColor.name());
 
+        removeCardFromHandUI(buildingCard);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -849,6 +842,7 @@ public class GameController {
         String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + selectedZone.getColor().name();
         sendActionToServer(actionStr);
 
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -880,6 +874,7 @@ public class GameController {
 
         sendActionToServer(actionStr);
 
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -894,12 +889,35 @@ public class GameController {
 
     private void sendDepositAction(Card card) {
         sendActionToServer("DEPOSIT:" + card.getId());
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
 
     private void sendPlacePropertyAction(Card card) {
-        sendActionToServer("PLACE_PROPERTY:" + card.getId());
+        if (!(card instanceof PropertyCard propertyCard)) {
+            showError("This card cannot be placed as property: " + card.getName());
+            return;
+        }
+
+        Set<Color> playableColors = propertyCard.getPlayableColors();
+        if (playableColors == null || playableColors.isEmpty()) {
+            showError("This property card has no available color to place it on");
+            return;
+        }
+
+        Color selectedColor;
+        if (playableColors.size() == 1) {
+            selectedColor = playableColors.iterator().next();
+        } else {
+            selectedColor = promptForPropertyColor(propertyCard, playableColors);
+            if (selectedColor == null) {
+                return;
+            }
+        }
+
+        sendActionToServer("PLACE_PROPERTY:" + card.getId() + ":" + selectedColor.name());
+        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -924,8 +942,7 @@ public class GameController {
         }
 
         boolean canPlayCard = gameManager.canCurrentPlayerPlayCard();
-        boolean canSwitchBiColorRent = selectedHandCard instanceof BiColorRentCard;
-        if (!canPlayCard && !canSwitchBiColorRent) {
+        if (!canPlayCard) {
             return;
         }
 
@@ -940,12 +957,8 @@ public class GameController {
             }
         } else if (selectedHandCard.isActionCard()) {
             if (isRentCard(selectedHandCard)) {
-                if (selectedHandCard instanceof BiColorRentCard) {
-                buttons.add(createActionOptionButton(getBiColorRentSwitchText(selectedHandCard), () -> switchBiColorRentColor(selectedHandCard)));
-                }
-                if (canPlayCard) {
-                    buttons.add(createActionOptionButton("Play rent card", () -> chooseOfflineRentCardMode(selectedHandCard)));
-                }
+                buttons.add(createActionOptionButton("Play as action card", () -> doPlayActionCard(selectedHandCard)));
+                buttons.add(createActionOptionButton("Deposit to Bank", () -> doDepositToBank(selectedHandCard)));
             } else if (canPlayCard) {
                 buttons.add(createActionOptionButton("Play as action card", () -> doPlayActionCard(selectedHandCard)));
                 buttons.add(createActionOptionButton("Deposit to Bank", () -> doDepositToBank(selectedHandCard)));
@@ -981,37 +994,32 @@ public class GameController {
                 || card.getCardType() == CardType.RENT_WILDCOLOR);
     }
 
-    private Optional<String> promptForRentCardMode(Card card) {
-        List<String> choices = List.of("Use as rent card", "Use as money");
-        ChoiceDialog<String> dialog = new ChoiceDialog<>(choices.get(0), choices);
-        dialog.setTitle("Choose Play Mode");
-        dialog.setHeaderText("Choose how to play " + card.getName());
-        dialog.setContentText("Mode:");
-        return dialog.showAndWait();
-    }
+    private Color promptForRentColor(Card rentCard, PlayerManagement currentPlayer) {
+        List<Color> choices = new ArrayList<>();
+        if (rentCard instanceof BiColorRentCard biColorRentCard) {
+            for (Color color : biColorRentCard.getValidColors()) {
+                if (currentPlayer.getRent(color) > 0) {
+                    choices.add(color);
+                }
+            }
+        } else {
+            for (Color color : currentPlayer.getPropertyZonesView().keySet()) {
+                if (currentPlayer.getRent(color) > 0) {
+                    choices.add(color);
+                }
+            }
+        }
 
-    private void chooseOnlineRentCardMode(Card card) {
-        Optional<String> result = promptForRentCardMode(card);
-        if (result.isEmpty()) {
-            return;
+        if (choices.isEmpty()) {
+            showError("No available property color can collect rent.");
+            return null;
         }
-        if ("Use as money".equals(result.get())) {
-            sendDepositAction(card);
-            return;
-        }
-        sendPlayAction(card);
-    }
 
-    private void chooseOfflineRentCardMode(Card card) {
-        Optional<String> result = promptForRentCardMode(card);
-        if (result.isEmpty()) {
-            return;
-        }
-        if ("Use as money".equals(result.get())) {
-            doDepositToBank(card);
-            return;
-        }
-        doPlayActionCard(card);
+        ChoiceDialog<Color> dialog = new ChoiceDialog<>(choices.get(0), choices);
+        dialog.setTitle("Choose Rent Color");
+        dialog.setHeaderText("Choose the property color for " + rentCard.getName());
+        dialog.setContentText("Color:");
+        return dialog.showAndWait().orElse(null);
     }
 
     private String getBiColorRentSwitchText(Card card) {
@@ -1047,8 +1055,57 @@ public class GameController {
     }
 
     private void doPlayActionCard(Card card) {
+        if (isRentCard(card)) {
+            doPlayRentCard(card);
+            return;
+        }
+
         try {
             gameManager.playActionCard(card);
+            selectedHandCard = null;
+            updateUI();
+            broadcastStateIfHost();
+        } catch (Exception e) {
+            showError("Action failed: " + e.getMessage());
+        }
+    }
+
+    private void doPlayRentCard(Card rentCard) {
+        try {
+            PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
+            Color selectedColor = promptForRentColor(rentCard, currentPlayer);
+            if (selectedColor == null) {
+                return;
+            }
+            if (rentCard instanceof BiColorRentCard biColorRentCard) {
+                biColorRentCard.setSelectedColor(selectedColor);
+            }
+
+            int rentAmount = currentPlayer.getRent(selectedColor);
+            if (rentAmount <= 0) {
+                showError("No rent available for " + selectedColor.getDisplayName() + ".");
+                return;
+            }
+
+            PlayerManagement targetPlayer = null;
+            if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
+                targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
+                if (targetPlayer == null) {
+                    return;
+                }
+            }
+
+            rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
+            gameManager.removeFromCurrentPlayerHand(rentCard);
+            gameManager.getCardManager().playCard(rentCard);
+            gameManager.recordPlayedCardAfterExternalResolution();
+
+            if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
+                gameManager.chargePlayer(currentPlayer, targetPlayer, rentAmount);
+            } else {
+                gameManager.chargeAllOpponents(currentPlayer, rentAmount);
+            }
+
             selectedHandCard = null;
             updateUI();
             broadcastStateIfHost();
@@ -1105,6 +1162,12 @@ public class GameController {
         } catch (Exception e) {
             showError("Operation failed: " + e.getMessage());
         }
+    }
+
+    private void removeCardFromHandUI(Card card) {
+        if (card == null || myHandBox == null) return;
+        myHandBox.getChildren().removeIf(node ->
+            node instanceof CardView cv && cv.getCard() != null && cv.getCard().getId().equals(card.getId()));
     }
 
     private void animateHandCardToTarget(Card card, javafx.scene.Node targetNode, Runnable after) {
@@ -1206,6 +1269,7 @@ public class GameController {
         if (discardMode) {
             if (isOnlineMode) { // Online discard command
                 sendActionToServer("DISCARD:" + card.getId());
+                removeCardFromHandUI(card);
                 return;
             }
             // Offline discard logic
@@ -1229,23 +1293,6 @@ public class GameController {
                 showError("It's not your turn!");
                 return;
             }
-            if (card instanceof BiColorWildPropertyCard wildCard) {
-                List<Color> choices = new ArrayList<>(wildCard.getPlayableColors());
-                ChoiceDialog<Color> dialog = new ChoiceDialog<>(choices.get(0), choices);
-                dialog.setTitle("Choose Color");
-                dialog.setHeaderText("Choose property color");
-                Optional<Color> result = dialog.showAndWait();
-                if (result.isEmpty()) return;
-                wildCard.setCurrentActiveColor(result.get());
-            } else if (card instanceof MultiColorWildPropertyCard wildCard) {
-                List<Color> choices = new ArrayList<>(wildCard.getPlayableColors());
-                ChoiceDialog<Color> dialog = new ChoiceDialog<>(choices.get(0), choices);
-                dialog.setTitle("Choose Color");
-                dialog.setHeaderText("Choose property color");
-                Optional<Color> result = dialog.showAndWait();
-                if (result.isEmpty()) return;
-                wildCard.setCurrentActiveColor(result.get());
-            }
 
             selectedHandCard = card;
             renderOnlineHandActionButtons(); // Show online buttons (send PLAY_ACTION)
@@ -1253,15 +1300,6 @@ public class GameController {
         }
 
         // 3) Offline mode
-        if (card instanceof BiColorWildPropertyCard wildCard) {
-            List<Color> choices = new ArrayList<>(wildCard.getPlayableColors());
-            ChoiceDialog<Color> dialog = new ChoiceDialog<>(choices.get(0), choices);
-            dialog.showAndWait().ifPresent(wildCard::setCurrentActiveColor);
-        } else if (card instanceof MultiColorWildPropertyCard wildCard) {
-            List<Color> choices = new ArrayList<>(wildCard.getPlayableColors());
-            ChoiceDialog<Color> dialog = new ChoiceDialog<>(choices.get(0), choices);
-            dialog.showAndWait().ifPresent(wildCard::setCurrentActiveColor);
-        }
         selectedHandCard = card;
         renderHandActionButtons();
     }
@@ -1345,9 +1383,7 @@ public class GameController {
         for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
             Color color = entry.getKey();
             PropertyZone zone = entry.getValue();
-            int requiredCount = player.getRequiredSetSize(color);
-            int currentCount = player.getPropertyCount(color);
-            Label colorLabel = new Label("[" + color.name() + "] " + currentCount + "/" + requiredCount);
+            Label colorLabel = new Label("[" + buildPropertySetTitle(player, color, player.getPropertyCount(color)) + "]");
             colorLabel.setStyle("-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color)
                     + "; -fx-border-color: " + toFxColor(color) + "; -fx-border-radius: 6; -fx-font-weight: bold;");
             propertyRow.getChildren().add(colorLabel);
@@ -1393,6 +1429,28 @@ public class GameController {
     }
 
     // CardView component replaces this method
+
+    private void updateClientInfo() {
+        if (clientInfoLabel == null) return;
+        if (gameManager == null || localPlayerIndex < 0 || localPlayerIndex >= gameManager.getPlayersView().size()) {
+            clientInfoLabel.setText("Player");
+            return;
+        }
+
+        PlayerManagement localPlayer = gameManager.getPlayersView().get(localPlayerIndex);
+        clientInfoLabel.setText("You are: " + localPlayer.getName());
+    }
+
+    private String buildPropertySetTitle(PlayerManagement player, Color color, int currentCount) {
+        if (player == null) {
+            return color.name() + "  " + currentCount + "/?  Rent: ?";
+        }
+
+        int requiredCount = player.getRequiredSetSize(color);
+        String requiredText = requiredCount == Integer.MAX_VALUE ? "?" : String.valueOf(requiredCount);
+        int rent = player.getRent(color);
+        return color.name() + "  " + currentCount + "/" + requiredText + "  Rent: " + rent + "M";
+    }
 
     private String toFxColor(Color color) {
         return switch (color) {
@@ -1453,6 +1511,10 @@ public class GameController {
     // Client-side handling for payment request
     public void handleRequirePayment(int amount, String collectorId) {
         PlayerManagement me = gameManager.getPlayersView().get(localPlayerIndex);
+        if (calculateAssetTotalValue(me) <= amount) {
+            sendActionToServer("PAYMENT_RESPONSE:NONE");
+            return;
+        }
 
         // 1) Ask player to select assets
         List<Card> selectedAssets = interactor.showSelectableAssets(me, amount);
@@ -1469,6 +1531,25 @@ public class GameController {
         }
 
         sendActionToServer(response.toString());
+    }
+
+    private int calculateAssetTotalValue(PlayerManagement player) {
+        int total = 0;
+        for (Card card : player.getBankCardsView()) {
+            total += card.getValue();
+        }
+        for (PropertyZone zone : player.getPropertyZonesView().values()) {
+            for (PropertyCard propertyCard : zone.getPropertiesView()) {
+                total += propertyCard.getValue();
+            }
+            if (zone.getHouse() != null) {
+                total += zone.getHouse().getValue();
+            }
+            if (zone.getHotel() != null) {
+                total += zone.getHotel().getValue();
+            }
+        }
+        return total;
     }
 
     public void handleAskJustSayNo(String sourcePlayer, String actionName) {
@@ -1497,6 +1578,7 @@ public class GameController {
         if (interactor == null) interactor = new Interactor();
         gameManager.setInteractor(interactor);
         gameManager.setPlayerCount(state.getPlayers().size());
+        gameManager.syncTurnStateFromNetwork(state.getCurrentPlayerIndex(), state.getPlayedCardsThisTurn());
 
         // Restore all players
         for (int i = 0; i < state.getPlayers().size(); i++) {

@@ -27,7 +27,11 @@ public class NetworkGameController {
     @FXML private VBox mainPanel;
     @FXML private TextField serverAddressField;
     @FXML private TextField portField;
-    @FXML private TextField playerCountField;
+    @FXML private HBox playerCountButtonBox;
+    @FXML private Button playerCount2Button;
+    @FXML private Button playerCount3Button;
+    @FXML private Button playerCount4Button;
+    @FXML private Button playerCount5Button;
     @FXML private Button hostButton;
     @FXML private Button joinButton;
     @FXML private Button readyButton;
@@ -51,6 +55,7 @@ public class NetworkGameController {
     private final List<String> lobbyPlayers = new java.util.ArrayList<>();
     private boolean localReady = false;
     private ScaleTransition readyAttention;
+    private boolean choosingHostPlayerCount = false;
 
     public void setGameApp(GameApp gameApp) {
         this.gameApp = gameApp;
@@ -64,29 +69,90 @@ public class NetworkGameController {
     public void initialize() {
         serverAddressField.setText("127.0.0.1");
         portField.setText("12345");
-        playerCountField.setText("2");
+        selectPlayerCount(2);
 
         gameArea.setVisible(false);
         endTurnButton.setDisable(true);
         if (startButton != null) startButton.setDisable(true);
         if (readyButton != null) readyButton.setDisable(true);
         if (playerInfoBox != null) playerInfoBox.setVisible(false);
+        setPlayerCountButtonsVisible(false);
         if (hintLabel != null) {
-            hintLabel.setText("Create/Join a room, then click Ready. The host can Start when everyone is Ready.");
+            hintLabel.setText("Click Create Game to choose the room size, or Join Game to enter an existing room.");
         }
 
-        playerCountField.textProperty().addListener((obs, old, val) -> {
-            if (!val.matches("[2-5]")) {
-                playerCountField.setText(old);
-            }
-        });
+    }
+
+    @FXML
+    private void onPlayerCount2Clicked() {
+        selectPlayerCount(2);
+    }
+
+    @FXML
+    private void onPlayerCount3Clicked() {
+        selectPlayerCount(3);
+    }
+
+    @FXML
+    private void onPlayerCount4Clicked() {
+        selectPlayerCount(4);
+    }
+
+    @FXML
+    private void onPlayerCount5Clicked() {
+        selectPlayerCount(5);
+    }
+
+    private void selectPlayerCount(int count) {
+        playerCount = count;
+        updatePlayerCountButtons();
+    }
+
+    private void updatePlayerCountButtons() {
+        setPlayerCountButtonStyle(playerCount2Button, playerCount == 2);
+        setPlayerCountButtonStyle(playerCount3Button, playerCount == 3);
+        setPlayerCountButtonStyle(playerCount4Button, playerCount == 4);
+        setPlayerCountButtonStyle(playerCount5Button, playerCount == 5);
+    }
+
+    private void setPlayerCountButtonStyle(Button button, boolean selected) {
+        if (button == null) return;
+        if (selected) {
+            button.setStyle("-fx-padding: 8 16; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #3b82f6; -fx-text-fill: white; -fx-border-color: #1d4ed8; -fx-border-radius: 8; -fx-background-radius: 8;");
+        } else {
+            button.setStyle("-fx-padding: 8 16; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #ffffff; -fx-text-fill: #2f4f6f; -fx-border-color: #cbd5e1; -fx-border-radius: 8; -fx-background-radius: 8;");
+        }
+    }
+
+    private void setPlayerCountButtonsDisabled(boolean disabled) {
+        if (playerCountButtonBox == null) return;
+        playerCountButtonBox.getChildren().forEach(node -> node.setDisable(disabled));
+    }
+
+    private void setPlayerCountButtonsVisible(boolean visible) {
+        if (playerCountButtonBox == null) return;
+        playerCountButtonBox.setVisible(visible);
+        playerCountButtonBox.setManaged(visible);
     }
 
     @FXML
     private void onHostButtonClicked() {
+        if (!choosingHostPlayerCount && gameServer == null) {
+            choosingHostPlayerCount = true;
+            setPlayerCountButtonsVisible(true);
+            setPlayerCountButtonsDisabled(false);
+            if (hostButton != null) {
+                hostButton.setText("Confirm Create Game");
+            }
+            if (hintLabel != null) {
+                hintLabel.setText("Choose 2, 3, 4, or 5 players, then click Confirm Create Game.");
+            }
+            statusLabel.setText("Choose the player count for this room.");
+            return;
+        }
+
         try {
             int port = Integer.parseInt(portField.getText());
-            playerCount = Integer.parseInt(playerCountField.getText());
 
             statusLabel.setText("Creating server...");
             lobbyPlayers.clear();
@@ -141,6 +207,11 @@ public class NetworkGameController {
 
             gameServer.start();
             isHost = true;
+            setPlayerCountButtonsDisabled(true);
+            if (hostButton != null) hostButton.setDisable(true);
+            if (joinButton != null) joinButton.setDisable(true);
+            if (portField != null) portField.setDisable(true);
+            if (serverAddressField != null) serverAddressField.setDisable(true);
             statusLabel.setText("Server started. Waiting for players: " + lobbyPlayers.size() + "/" + playerCount);
             if (hintLabel != null) {
                 hintLabel.setText("Click Ready first. When everyone is Ready, click Start (Host).");
@@ -177,7 +248,8 @@ public class NetworkGameController {
                 @Override
                 public void onConnected() {
                     Platform.runLater(() -> {
-                        statusLabel.setText("Connected. Waiting for the host to start the game...");
+                        localPlayerIndex = gameClient.getAssignedPlayerIndex();
+                        statusLabel.setText("Connected as Player " + (localPlayerIndex + 1) + ". Waiting for the host to start the game...");
                         if (hintLabel != null) {
                             hintLabel.setText("Click Ready. The host will Start when everyone is Ready.");
                         }
@@ -187,8 +259,10 @@ public class NetworkGameController {
                 @Override
                 public void onConnectFailed(String error) {
                     Platform.runLater(() -> {
-                        showError("Connection failed: " + error);
+                        showError(normalizeConnectionError(error));
                         statusLabel.setText("Disconnected");
+                        setConnectionControlsDisabled(false);
+                        setPlayerCountButtonsDisabled(false);
                     });
                 }
 
@@ -196,8 +270,14 @@ public class NetworkGameController {
                 public void onGameStarted(int playerCount) {
                     Platform.runLater(() -> {
                         statusLabel.setText("Game started!");
-                        localPlayerIndex = 1;
-                        startPlayerGame(1);
+                        NetworkGameController.this.playerCount = playerCount;
+                        int assignedIndex = gameClient.getAssignedPlayerIndex();
+                        if (assignedIndex < 1 || assignedIndex >= playerCount) {
+                            showError("Invalid player assignment from server.");
+                            return;
+                        }
+                        localPlayerIndex = assignedIndex;
+                        startPlayerGame(assignedIndex);
                     });
                 }
 
@@ -260,10 +340,33 @@ public class NetworkGameController {
 
             gameClient.connect();
             isHost = false;
+            setPlayerCountButtonsDisabled(true);
+            setConnectionControlsDisabled(true);
 
         } catch (NumberFormatException e) {
             showError("Please enter valid port number");
         }
+    }
+
+    private void setConnectionControlsDisabled(boolean disabled) {
+        if (hostButton != null) hostButton.setDisable(disabled);
+        if (joinButton != null) joinButton.setDisable(disabled);
+        if (portField != null) portField.setDisable(disabled);
+        if (serverAddressField != null) serverAddressField.setDisable(disabled);
+    }
+
+    private String normalizeConnectionError(String error) {
+        if (error == null || error.isBlank()) {
+            return "Connection failed.";
+        }
+        String message = error;
+        if (message.startsWith("ERROR: ")) {
+            message = message.substring("ERROR: ".length());
+        }
+        if ("Game is full".equalsIgnoreCase(message)) {
+            return "This room is full. You cannot join it.";
+        }
+        return "Connection failed: " + message;
     }
 
     @FXML

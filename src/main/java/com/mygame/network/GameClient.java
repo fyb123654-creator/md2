@@ -24,6 +24,7 @@ public class GameClient {
     private ExecutorService executorService;
     private OnMessageReceivedListener listener;
     private volatile GameStateData lastGameState;
+    private volatile int assignedPlayerIndex = -1;
 
     public interface OnMessageReceivedListener {
         void onConnected();
@@ -51,6 +52,10 @@ public class GameClient {
         this.listener = listener;
     }
 
+    public int getAssignedPlayerIndex() {
+        return assignedPlayerIndex;
+    }
+
     public void connect() {
         executorService.submit(() -> {
             try {
@@ -67,6 +72,7 @@ public class GameClient {
                 NetworkProtocol response = (NetworkProtocol) in.readObject();
                 if (response.getType() == NetworkProtocol.MessageType.CONNECT_ACK) {
                     if (response.getContent().startsWith("OK")) {
+                        assignedPlayerIndex = parseAssignedPlayerIndex(response.getContent());
                         System.out.println("Connected to server: " + response.getContent());
                         if (listener != null) {
                             listener.onConnected();
@@ -89,6 +95,21 @@ public class GameClient {
                 e.printStackTrace();
             }
         });
+    }
+
+    private int parseAssignedPlayerIndex(String content) {
+        if (content == null) {
+            return -1;
+        }
+        String[] parts = content.split(":", 2);
+        if (parts.length < 2) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private void listenForMessages() {

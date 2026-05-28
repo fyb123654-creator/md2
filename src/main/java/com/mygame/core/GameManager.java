@@ -198,6 +198,19 @@ public class GameManager {
         return playedCardsThisTurn < MAX_PLAY_COUNT_PER_TURN && winner == null;
     }
 
+    public void syncTurnStateFromNetwork(int currentPlayerIndex, int playedCardsThisTurn) {
+        if (currentPlayerIndex < 0 || currentPlayerIndex >= players.size()) {
+            throw new IllegalArgumentException("invalid current player index: " + currentPlayerIndex);
+        }
+        if (playedCardsThisTurn < 0 || playedCardsThisTurn > MAX_PLAY_COUNT_PER_TURN) {
+            throw new IllegalArgumentException("invalid played card count: " + playedCardsThisTurn);
+        }
+        this.currentPlayerIndex = currentPlayerIndex;
+        this.playedCardsThisTurn = playedCardsThisTurn;
+        this.currentPlayerEndedTurn = false;
+        this.gameStarted = true;
+    }
+
     public PlayerManagement getWinner() {
         return winner;
     }
@@ -265,7 +278,9 @@ public class GameManager {
             return;
         }
         removeFromCurrentPlayerHand(card);
-        cardManager.playCard(card);
+        if (!(card instanceof HouseCard) && !(card instanceof HotelCard)) {
+            cardManager.playCard(card);
+        }
         playedCardsThisTurn++;
         checkVictoryCondition();
     }
@@ -345,21 +360,38 @@ public class GameManager {
             actionName = "action";
         }
 
-        Card justSayNoCard = findJustSayNoCard(targetPlayer);
-        if (justSayNoCard == null || interactor == null) {
+        if (findJustSayNoCard(targetPlayer) == null || interactor == null) {
             return false;
         }
 
-        boolean shouldCancel = interactor.confirmJustSayNo(targetPlayer, sourcePlayer, actionName);
-        if (!shouldCancel) {
-            return false;
-        }
+        PlayerManagement responder = targetPlayer;
+        PlayerManagement opponent = sourcePlayer;
+        boolean canceled = false;
+        boolean counteringJustSayNo = false;
 
-        if (!targetPlayer.removeFromHand(justSayNoCard)) {
-            return false;
+        while (true) {
+            Card justSayNoCard = findJustSayNoCard(responder);
+            if (justSayNoCard == null) {
+                return canceled;
+            }
+
+            String actionToCancel = counteringJustSayNo ? "Just Say No" : actionName;
+            boolean shouldUse = interactor.confirmJustSayNo(responder, opponent, actionToCancel);
+            if (!shouldUse) {
+                return canceled;
+            }
+
+            if (!responder.removeFromHand(justSayNoCard)) {
+                return canceled;
+            }
+            cardManager.playCard(justSayNoCard);
+
+            canceled = responder == targetPlayer;
+            counteringJustSayNo = true;
+            PlayerManagement previousResponder = responder;
+            responder = opponent;
+            opponent = previousResponder;
         }
-        cardManager.playCard(justSayNoCard);
-        return true;
     }
 
     private Card findJustSayNoCard(PlayerManagement player) {
@@ -416,8 +448,7 @@ public class GameManager {
 
         for (Card card : selectedCards) {
             if (payer.removeFromBank(card) || payer.removeFromPropertyZones(card)) {
-                // Rule: cards paid to you go to your bank, not your hand
-                collector.depositToBank(card);
+                collector.addToHand(card);
             }
         }
     }
@@ -459,7 +490,7 @@ public class GameManager {
             }
         }
 
-        if (doubleTheRentCard == null || interactor == null) {
+        if (doubleTheRentCard == null || interactor == null || getRemainingPlayCountThisTurn() < 2) {
             return baseRentAmount;
         }
 
@@ -472,6 +503,7 @@ public class GameManager {
             return baseRentAmount;
         }
         cardManager.playCard(doubleTheRentCard);
+        recordPlayedCardAfterExternalResolution();
         return baseRentAmount * 2;
     }
 
@@ -521,7 +553,7 @@ public class GameManager {
         List<Card> bankCards = new ArrayList<>(payer.getBankCardsView());
         for (Card card : bankCards) {
             if (payer.removeFromBank(card)) {
-                collector.depositToBank(card);
+                collector.addToHand(card);
             }
         }
 
@@ -538,7 +570,7 @@ public class GameManager {
 
         for (Card card : propertyCards) {
             if (payer.removeFromPropertyZones(card)) {
-                collector.depositToBank(card);
+                collector.addToHand(card);
             }
         }
     }
@@ -553,17 +585,22 @@ public class GameManager {
     }
 
     public void placePropertyCard(Card card, PlayerManagement currentPlayer, Color color) {
-        play(card, color);
+        if (card instanceof HouseCard || card instanceof HotelCard || card instanceof BuildingCard) {
+            handleBuildingCard(card, currentPlayer, color);
+            removeFromCurrentPlayerHand(card);
+            recordPlayedCardAfterExternalResolution();
+            return;
+        }
         if (!(card instanceof PropertyCard propertyCard)) {
             throw new IllegalArgumentException("card is not a property card: " + card.getName());
-        }
-        if (propertyCard.getCardType() == CardType.BUILDING) {
-            handleBuildingCard(card, currentPlayer, color);
-            return;
         }
         if (color == null) {
             throw new IllegalArgumentException("color cannot be null when placing a property card");
         }
+        if (!propertyCard.getPlayableColors().contains(color)) {
+            throw new IllegalArgumentException("property card cannot be used as " + color);
+        }
+        play(card, color);
         currentPlayer.addProperty(color, propertyCard);
     }
 
@@ -571,7 +608,14 @@ public class GameManager {
         if (color == null) {
             throw new IllegalArgumentException("color cannot be null when placing a building card");
         }
-        if (!(card instanceof BuildingCard buildingCard)) {
+        BuildingCard buildingCard;
+        if (card instanceof BuildingCard existingBuildingCard) {
+            buildingCard = existingBuildingCard;
+        } else if (card instanceof HouseCard) {
+            buildingCard = new BuildingCard(card.getId(), card.getName(), card.getValue(), 3);
+        } else if (card instanceof HotelCard) {
+            buildingCard = new BuildingCard(card.getId(), card.getName(), card.getValue(), 5);
+        } else {
             throw new IllegalArgumentException("card is not a building card: " + card.getName());
         }
         currentPlayer.addBuilding(color, buildingCard);
@@ -632,3 +676,4 @@ public class GameManager {
         }
     }
 }
+

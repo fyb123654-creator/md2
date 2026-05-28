@@ -56,7 +56,7 @@ public final class HouseCard implements ActionCard {
             throw new IllegalStateException("interactor is not set");
         }
 
-        PropertyZone selectedZone = interactor.choicePropertyZone(currentPlayer);
+        PropertyZone selectedZone = interactor.choiceBuildingPropertyZone(currentPlayer, this);
         if (selectedZone == null) {
             return false;
         }

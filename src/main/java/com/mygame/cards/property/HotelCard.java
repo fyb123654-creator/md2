@@ -12,7 +12,7 @@ public final class HotelCard implements ActionCard {
     private final String id;
     private final String name;
     private final int value;
-    private static final int ADDED_RENT_VALUE = 4;
+    private static final int ADDED_RENT_VALUE = 5;
 
     public HotelCard(String id, String name, int value) {
         this.id = id;
@@ -56,7 +56,7 @@ public final class HotelCard implements ActionCard {
             throw new IllegalStateException("interactor is not set");
         }
 
-        PropertyZone selectedZone = interactor.choicePropertyZone(currentPlayer);
+        PropertyZone selectedZone = interactor.choiceBuildingPropertyZone(currentPlayer, this);
         if (selectedZone == null) {
             return false;
         }

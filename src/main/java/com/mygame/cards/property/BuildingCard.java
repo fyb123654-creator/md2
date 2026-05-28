@@ -48,6 +48,10 @@ public final class BuildingCard implements ActionCard {
     }
 
     public boolean canAttachTo(PropertySet propertySet) {
-        return propertySet != null && propertySet.isComplete() && !propertySet.isRailroad() && !propertySet.isUtility();
+        if (propertySet == null || !propertySet.isComplete()) {
+            return false;
+        }
+        String lowerName = name == null ? "" : name.toLowerCase();
+        return !lowerName.contains("house") || (!propertySet.isRailroad() && !propertySet.isUtility());
     }
 }

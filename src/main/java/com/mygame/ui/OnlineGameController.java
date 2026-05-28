@@ -76,14 +76,14 @@ public class OnlineGameController {
 
     public void startAsClient(String address, int port) {
         isHost = false;
-        localPlayerIndex = 1;
 
         gameClient = new GameClient(address, port);
         gameClient.setListener(new GameClient.OnMessageReceivedListener() {
             @Override
             public void onConnected() {
                 Platform.runLater(() -> {
-                    turnInfoLabel.setText("Connected! Waiting for game...");
+                    localPlayerIndex = gameClient.getAssignedPlayerIndex();
+                    turnInfoLabel.setText("Connected as Player " + (localPlayerIndex + 1) + ". Waiting for game...");
                 });
             }
 
@@ -95,7 +95,13 @@ public class OnlineGameController {
             @Override
             public void onGameStarted(int playerCount) {
                 Platform.runLater(() -> {
-                    turnInfoLabel.setText("Game started! You are Player 2");
+                    int assignedIndex = gameClient.getAssignedPlayerIndex();
+                    if (assignedIndex < 1 || assignedIndex >= playerCount) {
+                        showError("Invalid player assignment from server.");
+                        return;
+                    }
+                    localPlayerIndex = assignedIndex;
+                    turnInfoLabel.setText("Game started! You are Player " + (localPlayerIndex + 1));
                 });
             }
 
