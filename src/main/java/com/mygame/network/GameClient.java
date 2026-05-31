@@ -25,6 +25,7 @@ public class GameClient {
     private OnMessageReceivedListener listener;
     private volatile GameStateData lastGameState;
     private volatile int assignedPlayerIndex = -1;
+    private String localPlayerName = "Player";
 
     public interface OnMessageReceivedListener {
         void onConnected();
@@ -48,6 +49,14 @@ public class GameClient {
         this.executorService = Executors.newSingleThreadExecutor();
     }
 
+    public void setLocalPlayerName(String localPlayerName) {
+        if (localPlayerName == null || localPlayerName.isBlank()) {
+            this.localPlayerName = "Player";
+            return;
+        }
+        this.localPlayerName = localPlayerName.trim();
+    }
+
     public void setListener(OnMessageReceivedListener listener) {
         this.listener = listener;
     }
@@ -65,7 +74,7 @@ public class GameClient {
                 connected = true;
                 
                 // Send connect request
-                out.writeObject(NetworkProtocol.connect("Player"));
+                out.writeObject(NetworkProtocol.connect(localPlayerName));
                 out.flush();
                 
                 // Receive connect ack
@@ -73,7 +82,6 @@ public class GameClient {
                 if (response.getType() == NetworkProtocol.MessageType.CONNECT_ACK) {
                     if (response.getContent().startsWith("OK")) {
                         assignedPlayerIndex = parseAssignedPlayerIndex(response.getContent());
-                        System.out.println("Connected to server: " + response.getContent());
                         if (listener != null) {
                             listener.onConnected();
                         }
@@ -133,7 +141,6 @@ public class GameClient {
     private void handleMessage(NetworkProtocol message) {
         switch (message.getType()) {
             case CONNECT_ACK:
-                System.out.println("Connection acknowledged: " + message.getContent());
                 break;
                 
             case GAME_START:
@@ -197,16 +204,16 @@ public class GameClient {
                 break;
                 
             default:
-                System.out.println("Unknown message type: " + message.getType());
+                break;
         }
     }
 
     public void sendAction(String action) {
-        send(NetworkProtocol.playerAction("LocalPlayer", action));
+        send(NetworkProtocol.playerAction(localPlayerName, action));
     }
 
     public void sendChat(String message) {
-        send(NetworkProtocol.chat("LocalPlayer", message));
+        send(NetworkProtocol.chat(localPlayerName, message));
     }
 
     public void sendToggleReady(boolean ready) {
@@ -215,7 +222,6 @@ public class GameClient {
 
     private void send(NetworkProtocol message) {
         if (!connected) {
-            System.out.println("Not connected to server");
             return;
         }
         

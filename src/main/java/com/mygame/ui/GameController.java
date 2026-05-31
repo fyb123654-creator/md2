@@ -5,20 +5,28 @@ import com.mygame.cards.base.*;
 import com.mygame.cards.money.*;
 import com.mygame.cards.property.*;
 import com.mygame.cards.rent.*;
+import com.mygame.app.AppSettings;
 import com.mygame.core.GameManager;
+import com.mygame.core.events.GameEventListener;
 import com.mygame.model.*;
 import com.mygame.network.GameClient;
 import com.mygame.network.GameServer;
 import com.mygame.network.dto.GameStateData;
+import com.mygame.network.protocol.NetworkProtocol;
 import com.mygame.ui.components.CardView;
 import com.mygame.ui.model.PlayTarget;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceDialog;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
@@ -56,6 +64,18 @@ public class GameController {
     private Label turnInfoLabel;
     @FXML
     private Button endTurnButton;
+    @FXML
+    private Button helpButton;
+    @FXML
+    private Label hintLabel;
+    @FXML
+    private TextArea logArea;
+    @FXML
+    private TextArea chatArea;
+    @FXML
+    private TextField chatInput;
+    @FXML
+    private Button sendChatButton;
 
     // ---------------- Game data model ----------------
     private GameManager gameManager;
@@ -72,15 +92,23 @@ public class GameController {
 
     // Static instance used by network callbacks
     private static GameController instance;
+    private GameEventListener gameEventListener;
+    private final List<String> logLines = new ArrayList<>();
+    private final List<String> chatLines = new ArrayList<>();
+    private boolean winnerDialogShown = false;
+    private boolean discardNoticeShown = false;
+    private String defaultEndTurnText = "End Turn";
+    private volatile int lastServerLocalHandCount = -1;
 
     @FXML
     public void initialize() {
         instance = this;
-        // Debug: check FXML injection
-        System.out.println("GameController initialized");
-        System.out.println("myHandBox: " + myHandBox);
-        System.out.println("handActionBox: " + handActionBox);
-        System.out.println("endTurnButton: " + endTurnButton);
+        if (endTurnButton != null && endTurnButton.getText() != null && !endTurnButton.getText().isBlank()) {
+            defaultEndTurnText = endTurnButton.getText();
+        }
+        if (chatInput != null) {
+            chatInput.setOnAction(e -> onSendChatClicked());
+        }
     }
 
     public static GameController getInstance() {
@@ -89,15 +117,19 @@ public class GameController {
 
     // ---------------- 1. Initialization ----------------
     public void initializeGame(int playerCount) {
-        System.out.println("initializeGame called: isOnlineMode=" + isOnlineMode
-                + ", isHost=" + isHost()
-                + ", gameServer=" + (gameServer != null ? "set" : "NULL")
-                + ", playerCount=" + playerCount);
-
-        // Only offline mode or host can initialize the game
         if (isOnlineMode && !isHost()) {
-            System.out.println("Client should not initialize game - waiting for server state");
             return;
+        }
+
+        chatLines.clear();
+        if (chatArea != null) {
+            chatArea.clear();
+        }
+
+        if (!isOnlineMode) {
+            if (playerCount < 2 || playerCount > 5) {
+                playerCount = promptForOfflinePlayerCount();
+            }
         }
 
         discardMode = false;
@@ -108,27 +140,36 @@ public class GameController {
         interactor = new Interactor();
 
         if (isOnlineMode && isHost() && gameServer != null) {
-            gameManager = gameServer.getGameManager();
-            if (gameManager == null) {
-                gameManager = new GameManager();
-                gameServer.setGameManager(gameManager);
+            GameManager serverManager = gameServer.getGameManager();
+            if (serverManager == null) {
+                serverManager = new GameManager();
+                gameServer.setGameManager(serverManager);
             }
-            // Ensure player count matches and game is started
-            if (gameManager.getCardManager() == null) {
-                gameManager.setPlayerCount(playerCount);
-                gameManager.startRound();
+            if (serverManager.getCardManager() == null) {
+                serverManager.setPlayerCount(playerCount);
+                serverManager.startRound();
             }
-            gameManager.setInteractor(interactor);
+            bindGameManager(serverManager);
         } else {
-            gameManager = new GameManager();
-            gameManager.setInteractor(interactor);
-            gameManager.setPlayerCount(playerCount);
-            gameManager.startRound();
+            GameManager localManager = new GameManager();
+            List<String> names = new ArrayList<>();
+            for (int i = 1; i <= playerCount; i++) {
+                if (i == 1) {
+                    names.add(AppSettings.getInstance().getPlayerName());
+                } else {
+                    names.add("Player " + i);
+                }
+            }
+            localManager.setPlayerCount(playerCount, names);
+            localManager.startRound();
+            bindGameManager(localManager);
         }
 
-        System.out.println("initializeGame complete, gameManager=" + (gameManager != null ? "set" : "NULL")
-                + ", calling updateUI");
         updateUI();
+        if (!AppSettings.getInstance().isOnboardingShown()) {
+            AppSettings.getInstance().setOnboardingShown(true);
+            onHelpClicked();
+        }
 
         // Online host: when the server broadcasts the initial state before the controller is ready,
         // isMyTurn may stay false until a later state update. Force a local sync once on init.
@@ -140,6 +181,76 @@ public class GameController {
                 updateFromServerState(GameStateData.fromGameManager(gameManager));
             }
         }
+    }
+
+    @FXML
+    private void onSendChatClicked() {
+        if (chatInput == null) {
+            return;
+        }
+        String text = chatInput.getText();
+        if (text == null) {
+            return;
+        }
+        text = text.trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        chatInput.clear();
+        sendChatMessage(text);
+    }
+
+    public void receiveChatMessage(String playerId, String message) {
+        Platform.runLater(() -> appendChatLine(playerId, message));
+    }
+
+    private void sendChatMessage(String message) {
+        if (isOnlineMode) {
+            String sender = AppSettings.getInstance().getPlayerName();
+            if (isHost() && gameServer != null) {
+                appendChatLine(sender, message);
+                gameServer.broadcast(NetworkProtocol.chat(sender, message));
+                return;
+            }
+            if (gameClient != null) {
+                gameClient.sendChat(message);
+                return;
+            }
+            appendChatLine(sender, message);
+            return;
+        }
+        appendChatLine(AppSettings.getInstance().getPlayerName(), message);
+    }
+
+    private void appendChatLine(String playerId, String message) {
+        String line = (playerId == null || playerId.isBlank() ? "Player" : playerId) + ": " + (message == null ? "" : message);
+        chatLines.add(line);
+        int maxLines = 200;
+        while (chatLines.size() > maxLines) {
+            chatLines.remove(0);
+        }
+        if (chatArea != null) {
+            chatArea.setText(String.join("\n", chatLines));
+            chatArea.positionCaret(chatArea.getText().length());
+        }
+    }
+
+    private int promptForOfflinePlayerCount() {
+        List<Integer> options = List.of(2, 3, 4, 5);
+        int initial = AppSettings.getInstance().getOfflinePlayerCount();
+        if (!options.contains(initial)) {
+            initial = 2;
+        }
+
+        ChoiceDialog<Integer> dialog = new ChoiceDialog<>(initial, options);
+        dialog.setTitle("Game Setup");
+        dialog.setHeaderText("Select number of players");
+        dialog.setContentText("Players:");
+        Optional<Integer> result = dialog.showAndWait();
+
+        int selected = result.orElse(initial);
+        AppSettings.getInstance().setOfflinePlayerCount(selected);
+        return selected;
     }
 
     public void setOnlineMode(boolean online, int playerIndex) {
@@ -168,6 +279,37 @@ public class GameController {
         return localPlayerIndex == 0;
     }
 
+    private void bindGameManager(GameManager manager) {
+        if (this.gameManager != null && gameEventListener != null) {
+            this.gameManager.removeEventListener(gameEventListener);
+        }
+        this.gameManager = manager;
+        if (this.gameManager == null) {
+            return;
+        }
+        this.gameManager.setInteractor(interactor);
+        if (gameEventListener == null) {
+            gameEventListener = event -> Platform.runLater(() -> appendLog(event.getMessage()));
+        }
+        this.gameManager.addEventListener(gameEventListener);
+        appendLog("Game ready");
+    }
+
+    private void appendLog(String message) {
+        if (message == null || message.isBlank()) {
+            return;
+        }
+        logLines.add(message);
+        int maxLines = 200;
+        while (logLines.size() > maxLines) {
+            logLines.remove(0);
+        }
+        if (logArea != null) {
+            logArea.setText(String.join("\n", logLines));
+            logArea.positionCaret(logArea.getText().length());
+        }
+    }
+
     public void updateFromServerState(GameStateData state) {
         // Update UI based on server state
         if (state == null) return;
@@ -176,27 +318,50 @@ public class GameController {
             syncLocalGameManagerFromState(state);
         }
 
-        System.out.println("updateFromServerState called: currentPlayerIndex=" + state.getCurrentPlayerIndex()
-                + ", localPlayerIndex=" + localPlayerIndex
-                + ", isMyTurn=" + (state.getCurrentPlayerIndex() == localPlayerIndex)
-                + ", isHost=" + isHost()
-                + ", handCardCount=" + (state.getPlayers().size() > localPlayerIndex
-                ? state.getPlayers().get(localPlayerIndex).getHandCards().size() : "N/A"));
-
         boolean wasMyTurn = isMyTurn;
         isMyTurn = (state.getCurrentPlayerIndex() == localPlayerIndex);
         int localHandCount = state.getPlayers().size() > localPlayerIndex
                 ? state.getPlayers().get(localPlayerIndex).getHandCards().size()
                 : 0;
+        lastServerLocalHandCount = localHandCount;
         if (discardMode && (!isMyTurn || localHandCount <= PlayerManagement.MAX_HAND_SIZE)) {
             discardMode = false;
+            discardNoticeShown = false;
+            restoreEndTurnButtonTextIfNeeded();
             selectedHandCard = null;
             handActionBox.getChildren().clear();
         }
-        endTurnButton.setDisable(!isMyTurn);
+        if (isMyTurn && localHandCount > PlayerManagement.MAX_HAND_SIZE && !discardMode) {
+            startDiscardMode();
+        }
+        endTurnButton.setDisable(!isMyTurn || discardMode);
 
         updateClientInfo();
-        turnInfoLabel.setText("Plays: " + state.getPlayedCardsThisTurn() + "/" + state.getMaxPlayCountPerTurn());
+        String currentPlayerName = state.getPlayers().size() > state.getCurrentPlayerIndex()
+                ? state.getPlayers().get(state.getCurrentPlayerIndex()).getPlayerName()
+                : "Player";
+        int remainingPlays = state.getMaxPlayCountPerTurn() - state.getPlayedCardsThisTurn();
+        turnInfoLabel.setText("Turn: " + currentPlayerName + " | Remaining plays: " + remainingPlays);
+        if (hintLabel != null) {
+            if (state.getWinner() != null && !state.getWinner().isBlank()) {
+                hintLabel.setText("Winner: " + state.getWinner());
+                discardMode = false;
+                discardNoticeShown = false;
+                restoreEndTurnButtonTextIfNeeded();
+                if (endTurnButton != null) {
+                    endTurnButton.setDisable(true);
+                }
+                showWinnerDialogIfNeeded();
+            } else if (discardMode) {
+                hintLabel.setText(buildDiscardHintText());
+            } else if (!isMyTurn) {
+                hintLabel.setText("Waiting for your turn.");
+            } else if (remainingPlays <= 0) {
+                hintLabel.setText("No plays left. End your turn.");
+            } else {
+                hintLabel.setText("Click a hand card to play it as action / bank / property.");
+            }
+        }
 
         // New turn: clear selection
         if (!wasMyTurn && isMyTurn) {
@@ -207,10 +372,8 @@ public class GameController {
         // Host: render from real GameManager objects
         // Client: render from DTOs
         if (isOnlineMode && isHost() && gameManager != null) {
-            System.out.println("Host: refreshing UI from local gameManager");
             updateUI();
         } else if (isOnlineMode && !isHost()) {
-            System.out.println("Client: rendering from server state");
             updateHandCardsFromServer(state);
             updateBankCardsFromServer(state);
             updatePropertyCardsFromServer(state);
@@ -220,15 +383,11 @@ public class GameController {
     }
 
     private void updateCardDisabledState() {
-        System.out.println("updateCardDisabledState called, isMyTurn: " + isMyTurn);
-        System.out.println("myHandBox children count: " + myHandBox.getChildren().size());
-
         // Update disabled state for all hand cards
         for (var node : myHandBox.getChildren()) {
             if (node instanceof CardView cardView) {
                 boolean shouldDisable = !isMyTurn;
                 cardView.setDisable(shouldDisable);
-                System.out.println("Card disabled: " + shouldDisable + ", card: " + cardView);
             }
         }
     }
@@ -250,7 +409,6 @@ public class GameController {
             Card card = cardData.toCard();
             CardView cardView = new CardView(card);
             cardView.setOnAction(event -> {
-                System.out.println("Card clicked: " + card.getName());
                 handleCardClick(card);
             });
             // Ensure card is clickable
@@ -259,7 +417,6 @@ public class GameController {
             cardView.setMouseTransparent(false);
             myHandBox.getChildren().add(cardView);
         }
-        System.out.println("Hand cards updated: " + localPlayerData.getHandCards().size() + " cards");
     }
 
     private void updateBankCardsFromServer(GameStateData state) {
@@ -303,6 +460,7 @@ public class GameController {
                     : null;
             Label colorTitle = new Label(buildPropertySetTitle(localPlayer, color, zoneData.getProperties().size()));
             colorTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + toFxColor(color) + ";");
+            installLabelTooltip(colorTitle, colorTitle.getText());
             colorGroup.getChildren().add(colorTitle);
 
             HBox propertyRow = new HBox(8);
@@ -389,6 +547,7 @@ public class GameController {
                 Label colorLabel = new Label("[" + buildPropertySetTitle(player, color, zoneData.getProperties().size()) + "]");
                 colorLabel.setStyle("-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color)
                         + "; -fx-border-color: " + toFxColor(color) + "; -fx-border-radius: 6; -fx-font-weight: bold;");
+                installLabelTooltip(colorLabel, colorLabel.getText());
                 propertyRow.getChildren().add(colorLabel);
                 hasProperty = true;
             }
@@ -423,7 +582,28 @@ public class GameController {
                 : currentPlayer;
 
         updateClientInfo();
-        turnInfoLabel.setText("Remaining plays: " + gameManager.getRemainingPlayCountThisTurn());
+        String turnPlayerName = currentPlayer.getName();
+        turnInfoLabel.setText("Turn: " + turnPlayerName + " | Remaining plays: " + gameManager.getRemainingPlayCountThisTurn());
+        if (hintLabel != null) {
+            if (gameManager.hasWinner()) {
+                hintLabel.setText("Winner: " + gameManager.getWinner().getName());
+                discardMode = false;
+                discardNoticeShown = false;
+                restoreEndTurnButtonTextIfNeeded();
+                if (endTurnButton != null) {
+                    endTurnButton.setDisable(true);
+                }
+                showWinnerDialogIfNeeded();
+            } else if (discardMode) {
+                hintLabel.setText(buildDiscardHintText());
+            } else if (isOnlineMode && !isMyTurn) {
+                hintLabel.setText("Waiting for your turn.");
+            } else if (gameManager.getRemainingPlayCountThisTurn() <= 0) {
+                hintLabel.setText("No plays left. End your turn.");
+            } else {
+                hintLabel.setText("Click a hand card to play it as action / bank / property.");
+            }
+        }
         renderOpponentArea(localPlayer);
         renderHandCards(localPlayer);
         renderBankCards(localPlayer);
@@ -489,6 +669,7 @@ public class GameController {
 
             Label colorTitle = new Label(buildPropertySetTitle(player, color, currentCount));
             colorTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + toFxColor(color) + ";");
+            installLabelTooltip(colorTitle, colorTitle.getText());
             colorGroup.getChildren().add(colorTitle);
 
             HBox propertyRow = new HBox(8);
@@ -583,10 +764,6 @@ public class GameController {
 
     // Card click handling in online mode
     private void handleOnlineCardClick(Card card) {
-        System.out.println("handleOnlineCardClick called: " + card.getName()
-                + ", cardType: " + card.getCardType()
-                + ", isMyTurn: " + isMyTurn
-                + ", gameClient: " + (gameClient != null ? "set" : "NULL"));
         if (!isMyTurn) {
             showError("It's not your turn!");
             return;
@@ -594,7 +771,6 @@ public class GameController {
 
         selectedHandCard = card;
         renderOnlineHandActionButtons();
-        System.out.println("Online action buttons rendered for card: " + card.getName());
     }
 
     // Online host: broadcast state to all clients
@@ -607,23 +783,18 @@ public class GameController {
     // Online client: send actions to server
     private void sendActionToServer(String action) {
         if (!isOnlineMode) return;
-        System.out.println("sendActionToServer: " + action);
         if (!isHost() && gameClient != null) {
             gameClient.sendAction(action);
         } else if (isHost() && gameServer != null) {
             gameServer.processHostAction(action);
-        } else {
-            System.out.println("sendActionToServer: no valid connection");
         }
     }
 
     private void renderOnlineHandActionButtons() {
         handActionBox.getChildren().clear();
         if (selectedHandCard == null) {
-            System.out.println("renderOnlineHandActionButtons: selectedHandCard is null");
             return;
         }
-        System.out.println("renderOnlineHandActionButtons: " + selectedHandCard.getName() + ", type: " + selectedHandCard.getCardType());
 
         HBox buttonRow = new HBox(14);
         buttonRow.setAlignment(Pos.CENTER);
@@ -650,7 +821,6 @@ public class GameController {
 
         buttonRow.getChildren().addAll(buttons);
         handActionBox.getChildren().add(buttonRow);
-        System.out.println("Added " + buttons.size() + " buttons");
     }
 
     private void handleOnlineSlyDeal(Card card) {
@@ -1232,13 +1402,41 @@ public class GameController {
         return result.orElse(null);
     }
 
+    @FXML
+    private void onHelpClicked() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Help");
+        alert.setHeaderText("Quick Rules");
+        alert.setContentText(
+                "Goal: collect 3 complete property sets.\n" +
+                        "Each turn: draw 2 cards, play up to 3 cards, then keep max 7 cards in hand.\n" +
+                        "Money cards go to Bank, property cards go to Property Area, action cards apply effects.\n" +
+                        "Tip: click a hand card to see available actions.\n" +
+                        "\n" +
+                        "Win condition: the first player who has 3 complete property sets wins.");
+        alert.showAndWait();
+    }
+
     // Handle the End Turn button click
     // This method must be bound in the FXML file, for example: <Button onAction="#onEndTurnClicked" text="End Turn"/>
 
     // Replacement for original onEndTurnClicked
     @FXML
     private void onEndTurnClicked() {
+        if (gameManager != null && gameManager.hasWinner()) {
+            discardMode = false;
+            if (endTurnButton != null) {
+                endTurnButton.setDisable(true);
+            }
+            if (hintLabel != null) {
+                hintLabel.setText("Winner: " + gameManager.getWinner().getName());
+            }
+            return;
+        }
         if (isOnlineMode) { // In online mode both host and client send a command
+            if (discardMode) {
+                return;
+            }
             if (getLocalHandCardCount() > PlayerManagement.MAX_HAND_SIZE) {
                 startDiscardMode();
                 return;
@@ -1263,8 +1461,6 @@ public class GameController {
     }
 
     private void handleCardClick(Card card) {
-        System.out.println("handleCardClick called, isOnlineMode: " + isOnlineMode + ", isHost: " + isHost() + ", discardMode: " + discardMode);
-
         // 1) Discard mode first
         if (discardMode) {
             if (isOnlineMode) { // Online discard command
@@ -1313,10 +1509,98 @@ public class GameController {
         discardMode = true;
         selectedHandCard = null;
         handActionBox.getChildren().clear();
-        showError("Your hand exceeds the limit. Click a hand card to discard it.");
+        if (hintLabel != null) {
+            hintLabel.setText(buildDiscardHintText());
+        }
+        if (endTurnButton != null) {
+            endTurnButton.setDisable(true);
+            endTurnButton.setText("Discard");
+        }
+        if (!discardNoticeShown) {
+            discardNoticeShown = true;
+            showError("Hand limit exceeded. Click hand cards to discard until you have 7 or fewer.");
+        }
+    }
+
+    private void restoreEndTurnButtonTextIfNeeded() {
+        if (endTurnButton == null) {
+            return;
+        }
+        if (!discardMode && endTurnButton.getText() != null && !endTurnButton.getText().equals(defaultEndTurnText)) {
+            endTurnButton.setText(defaultEndTurnText);
+        }
+    }
+
+    private String buildDiscardHintText() {
+        int current = getLocalHandCardCount();
+        int need = Math.max(0, current - PlayerManagement.MAX_HAND_SIZE);
+        if (need <= 0) {
+            return "Discard mode: click a hand card to discard.";
+        }
+        return "Discard mode: hand " + current + "/" + PlayerManagement.MAX_HAND_SIZE + " (discard " + need + " card" + (need > 1 ? "s" : "") + ").";
+    }
+
+    private void showWinnerDialogIfNeeded() {
+        if (winnerDialogShown) {
+            return;
+        }
+        if (gameManager == null || !gameManager.hasWinner()) {
+            return;
+        }
+        winnerDialogShown = true;
+
+        String winnerName = gameManager.getWinner().getName();
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Game Over");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.OK);
+
+        VBox root = new VBox(10);
+        root.getStyleClass().add("overlay");
+        root.setStyle("-fx-padding: 18; -fx-alignment: center;");
+
+        Label title = new Label("Winner");
+        title.setStyle("-fx-font-size: 26px; -fx-font-weight: 800;");
+        Label winner = new Label(winnerName);
+        winner.setStyle("-fx-font-size: 22px; -fx-font-weight: 700; -fx-text-fill: #1d4ed8;");
+
+        TextArea summary = new TextArea(buildWinnerSummaryText());
+        summary.setEditable(false);
+        summary.setWrapText(true);
+        summary.setPrefRowCount(8);
+        summary.setPrefWidth(520);
+
+        root.getChildren().addAll(title, winner, summary);
+        dialog.getDialogPane().setContent(root);
+        try {
+            var url = getClass().getResource("/theme.css");
+            if (url != null) {
+                dialog.getDialogPane().getStylesheets().add(url.toExternalForm());
+            }
+        } catch (Exception ignored) {
+        }
+
+        dialog.show();
+    }
+
+    private String buildWinnerSummaryText() {
+        if (gameManager == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (PlayerManagement p : gameManager.getPlayersView()) {
+            sb.append(p.getName())
+                    .append(" | Sets: ").append(p.getCompleteSetCount()).append("/").append(PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN)
+                    .append(" | Bank: ").append(p.getBankTotalValue()).append("M")
+                    .append(" | Hand: ").append(p.getHandCardCount())
+                    .append("\n");
+        }
+        return sb.toString().trim();
     }
 
     private int getLocalHandCardCount() {
+        if (isOnlineMode && lastServerLocalHandCount >= 0) {
+            return lastServerLocalHandCount;
+        }
         if (gameManager != null) {
             PlayerManagement player = isOnlineMode
                     ? gameManager.getPlayersView().get(localPlayerIndex)
@@ -1386,6 +1670,7 @@ public class GameController {
             Label colorLabel = new Label("[" + buildPropertySetTitle(player, color, player.getPropertyCount(color)) + "]");
             colorLabel.setStyle("-fx-padding: 6 10; -fx-background-color: " + toSoftFxColor(color)
                     + "; -fx-border-color: " + toFxColor(color) + "; -fx-border-radius: 6; -fx-font-weight: bold;");
+            installLabelTooltip(colorLabel, colorLabel.getText());
             propertyRow.getChildren().add(colorLabel);
             for (PropertyCard propertyCard : zone.getPropertiesView()) {
                 hasProperty = true;
@@ -1438,7 +1723,7 @@ public class GameController {
         }
 
         PlayerManagement localPlayer = gameManager.getPlayersView().get(localPlayerIndex);
-        clientInfoLabel.setText("You are: " + localPlayer.getName());
+        clientInfoLabel.setText("You are: " + localPlayer.getName() + " | Complete sets: " + localPlayer.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
     }
 
     private String buildPropertySetTitle(PlayerManagement player, Color color, int currentCount) {
@@ -1450,6 +1735,24 @@ public class GameController {
         String requiredText = requiredCount == Integer.MAX_VALUE ? "?" : String.valueOf(requiredCount);
         int rent = player.getRent(color);
         return color.name() + "  " + currentCount + "/" + requiredText + "  Rent: " + rent + "M";
+    }
+
+    private void installLabelTooltip(Label label, String text) {
+        if (label == null) {
+            return;
+        }
+        String value = text == null ? "" : text.trim();
+        if (value.isEmpty()) {
+            label.setTooltip(null);
+            return;
+        }
+        Tooltip tooltip = label.getTooltip();
+        if (tooltip == null) {
+            tooltip = new Tooltip(value);
+            label.setTooltip(tooltip);
+        } else {
+            tooltip.setText(value);
+        }
     }
 
     private String toFxColor(Color color) {
@@ -1574,11 +1877,11 @@ public class GameController {
     // Shadow-engine sync: clone server state into a local engine
     private void syncLocalGameManagerFromState(GameStateData state) {
         // Create a new local engine
-        gameManager = new GameManager();
         if (interactor == null) interactor = new Interactor();
-        gameManager.setInteractor(interactor);
-        gameManager.setPlayerCount(state.getPlayers().size());
-        gameManager.syncTurnStateFromNetwork(state.getCurrentPlayerIndex(), state.getPlayedCardsThisTurn());
+        GameManager localManager = new GameManager();
+        localManager.setPlayerCount(state.getPlayers().size());
+        localManager.syncTurnStateFromNetwork(state.getCurrentPlayerIndex(), state.getPlayedCardsThisTurn());
+        bindGameManager(localManager);
 
         // Restore all players
         for (int i = 0; i < state.getPlayers().size(); i++) {

@@ -6,13 +6,17 @@ import com.mygame.cards.money.*;
 import com.mygame.cards.property.*;
 import com.mygame.cards.rent.*;
 import com.mygame.core.deck.CardManager;
+import com.mygame.core.events.GameEvent;
+import com.mygame.core.events.GameEventListener;
+import com.mygame.core.events.GameEventType;
+import com.mygame.core.interaction.GameInteractor;
 import com.mygame.core.pending.PendingAction;
 import com.mygame.model.*;
-import com.mygame.ui.Interactor;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public class GameManager {
     private static final int MIN_PLAYER_COUNT = 2;
@@ -29,13 +33,14 @@ public class GameManager {
     private boolean currentPlayerEndedTurn;
     private boolean gameStarted;
     private PlayerManagement winner;
-    private Interactor interactor;
+    private GameInteractor interactor;
     private boolean canSelectPropertyCard;
     private boolean canSelectBankCard;
     private final List<Card> selectedPropertyCardBuffer;
     private final List<Card> selectedBankCardBuffer;
     private GamePhase gamePhase = GamePhase.NORMAL_TURN;
     private PendingAction pendingAction;
+    private final List<GameEventListener> eventListeners;
 
     public GameManager() {
         this.players = new ArrayList<>();
@@ -48,6 +53,7 @@ public class GameManager {
         this.canSelectBankCard = false;
         this.selectedPropertyCardBuffer = new ArrayList<>();
         this.selectedBankCardBuffer = new ArrayList<>();
+        this.eventListeners = new ArrayList<>();
     }
 
     public static CardManager createGameCardManager() {
@@ -60,11 +66,27 @@ public class GameManager {
     }
 
     public void setPlayerCount(int playerCount) {
+        List<String> names = new ArrayList<>();
+        for (int i = 1; i <= playerCount; i++) {
+            names.add("Player " + i);
+        }
+        setPlayerCount(playerCount, names);
+    }
+
+    public void setPlayerCount(int playerCount, List<String> playerNames) {
         validatePlayerCount(playerCount);
+        if (playerNames == null || playerNames.size() != playerCount) {
+            throw new IllegalArgumentException("playerNames must have size " + playerCount);
+        }
+
         this.playerCount = playerCount;
         this.players.clear();
         for (int i = 1; i <= playerCount; i++) {
-            players.add(new PlayerManagement(String.valueOf(i), "Player " + i));
+            String name = Objects.requireNonNullElse(playerNames.get(i - 1), "").trim();
+            if (name.isBlank()) {
+                name = "Player " + i;
+            }
+            players.add(new PlayerManagement(String.valueOf(i), name));
         }
         this.currentPlayerIndex = -1;
         this.playedCardsThisTurn = 0;
@@ -85,12 +107,35 @@ public class GameManager {
         return cardManager;
     }
 
-    public void setInteractor(Interactor interactor) {
+    public void setInteractor(GameInteractor interactor) {
         this.interactor = interactor;
     }
 
-    public Interactor getInteractor() {
+    public GameInteractor getInteractor() {
         return interactor;
+    }
+
+    public void addEventListener(GameEventListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("listener cannot be null");
+        }
+        if (!eventListeners.contains(listener)) {
+            eventListeners.add(listener);
+        }
+    }
+
+    public void removeEventListener(GameEventListener listener) {
+        eventListeners.remove(listener);
+    }
+
+    private void fireEvent(GameEventType type, String message) {
+        if (eventListeners.isEmpty()) {
+            return;
+        }
+        GameEvent event = new GameEvent(type, message);
+        for (GameEventListener listener : new ArrayList<>(eventListeners)) {
+            listener.onGameEvent(event);
+        }
     }
 
     public boolean canSelectPropertyCard() {
@@ -220,20 +265,30 @@ public class GameManager {
     }
 
     public void prepareRound() {
-        ensurePlayerCountIsSet();
-        cardManager = createGameCardManager();
-        currentPlayerIndex = -1;
-        playedCardsThisTurn = 0;
-        currentPlayerEndedTurn = false;
-        gameStarted = false;
+        prepareRound(null);
     }
 
     public void startRound() {
-        prepareRound();
+        startRound(null);
+    }
+
+    public void startRound(CardManager customCardManager) {
+        prepareRound(customCardManager);
         dealInitialHands();
         currentPlayerIndex = 0;
         gameStarted = true;
         beginCurrentPlayerTurn();
+        fireEvent(GameEventType.ROUND_STARTED, "Round started (" + playerCount + " players)");
+    }
+
+    private void prepareRound(CardManager customCardManager) {
+        ensurePlayerCountIsSet();
+        cardManager = customCardManager != null ? customCardManager : createGameCardManager();
+        currentPlayerIndex = -1;
+        playedCardsThisTurn = 0;
+        currentPlayerEndedTurn = false;
+        gameStarted = false;
+        winner = null;
     }
 
     public void confirmCurrentPlayerTurnEnded() {
@@ -283,6 +338,7 @@ public class GameManager {
         }
         playedCardsThisTurn++;
         checkVictoryCondition();
+        fireEvent(GameEventType.ACTION_RESOLVED, getCurrentPlayer().getName() + " played " + card.getName());
     }
 
     /**
@@ -345,6 +401,8 @@ public class GameManager {
             return false;
         }
         currentPlayer.addProperty(color, (PropertyCard) card);
+        checkVictoryCondition();
+        fireEvent(GameEventType.PROPERTY_STOLEN, currentPlayer.getName() + " stole " + card.getName() + " from " + targetPlayer.getName());
         return true;
     }
 
@@ -430,6 +488,7 @@ public class GameManager {
 
         if (totalAssetValue <= amount) {
             transferAllAssetsToCollectorHand(collector, payer);
+            checkVictoryCondition();
             return;
         }
 
@@ -451,6 +510,7 @@ public class GameManager {
                 collector.addToHand(card);
             }
         }
+        checkVictoryCondition();
     }
 
     public void chargeAllOpponents(PlayerManagement collector, int amount) {
@@ -515,6 +575,58 @@ public class GameManager {
         for (Card card : cards) {
             currentPlayer.addToHand(card);
         }
+        fireEvent(GameEventType.TURN_STARTED, "Turn: " + currentPlayer.getName() + " (+2 cards)");
+        checkDeckExhaustionEndGameIfStuck();
+    }
+
+    private void checkDeckExhaustionEndGameIfStuck() {
+        if (winner != null || cardManager == null) {
+            return;
+        }
+        if (cardManager.getDrawPileSize() > 0 || cardManager.getDiscardPileSize() > 0) {
+            return;
+        }
+        for (PlayerManagement player : players) {
+            if (player.getHandCardCount() > 0) {
+                return;
+            }
+        }
+        winner = determineWinnerByScore();
+        currentPlayerEndedTurn = true;
+        fireEvent(GameEventType.WINNER_DETERMINED, "Winner: " + winner.getName());
+    }
+
+    private PlayerManagement determineWinnerByScore() {
+        PlayerManagement best = null;
+        int bestCompleteSets = -1;
+        int bestPropertyCount = -1;
+        int bestBankValue = -1;
+        int bestHandCount = -1;
+
+        for (PlayerManagement player : players) {
+            int completeSets = player.getCompleteSetCount();
+            int propertyCount = 0;
+            for (PropertyZone zone : player.getPropertyZonesView().values()) {
+                propertyCount += zone.getPropertiesView().size();
+                if (zone.getHouse() != null) propertyCount++;
+                if (zone.getHotel() != null) propertyCount++;
+            }
+            int bankValue = player.getBankTotalValue();
+            int handCount = player.getHandCardCount();
+
+            if (best == null
+                    || completeSets > bestCompleteSets
+                    || (completeSets == bestCompleteSets && propertyCount > bestPropertyCount)
+                    || (completeSets == bestCompleteSets && propertyCount == bestPropertyCount && bankValue > bestBankValue)
+                    || (completeSets == bestCompleteSets && propertyCount == bestPropertyCount && bankValue == bestBankValue && handCount > bestHandCount)) {
+                best = player;
+                bestCompleteSets = completeSets;
+                bestPropertyCount = propertyCount;
+                bestBankValue = bankValue;
+                bestHandCount = handCount;
+            }
+        }
+        return best != null ? best : players.get(0);
     }
 
     private int calculateAssetTotalValue(PlayerManagement player) {
@@ -576,12 +688,14 @@ public class GameManager {
     }
 
     public void depositMoneyCard(Card card) {
-        play(card, null);
         PlayerManagement currentPlayer = getCurrentPlayer();
         if (!card.canBeUsedAsMoney()) {
             throw new IllegalArgumentException("card cannot be deposited as money: " + card.getName());
         }
+        removeFromCurrentPlayerHand(card);
         currentPlayer.depositToBank(card);
+        recordPlayedCardAfterExternalResolution();
+        fireEvent(GameEventType.CARD_BANKED, currentPlayer.getName() + " banked " + card.getName());
     }
 
     public void placePropertyCard(Card card, PlayerManagement currentPlayer, Color color) {
@@ -600,8 +714,10 @@ public class GameManager {
         if (!propertyCard.getPlayableColors().contains(color)) {
             throw new IllegalArgumentException("property card cannot be used as " + color);
         }
-        play(card, color);
+        removeFromCurrentPlayerHand(card);
         currentPlayer.addProperty(color, propertyCard);
+        recordPlayedCardAfterExternalResolution();
+        fireEvent(GameEventType.PROPERTY_PLACED, currentPlayer.getName() + " placed " + card.getName() + " as " + color.name());
     }
 
     private void handleBuildingCard(Card card, PlayerManagement currentPlayer, Color color) {
@@ -640,6 +756,7 @@ public class GameManager {
             if (player.hasWon()) {
                 winner = player;
                 currentPlayerEndedTurn = true;
+                fireEvent(GameEventType.WINNER_DETERMINED, "Winner: " + player.getName());
                 break;
             }
         }

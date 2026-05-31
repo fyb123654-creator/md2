@@ -5,10 +5,10 @@ import com.mygame.cards.base.Card;
 import com.mygame.cards.base.CardType;
 import com.mygame.cards.property.PropertyCard;
 import com.mygame.core.GameManager;
+import com.mygame.core.interaction.GameInteractor;
 import com.mygame.model.Color;
 import com.mygame.model.PlayerManagement;
 import com.mygame.model.PropertyZone;
-import com.mygame.ui.Interactor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,7 +51,7 @@ public final class ForcedDealCard implements ActionCard {
             throw new IllegalArgumentException("gameManager cannot be null");
         }
 
-        Interactor interactor = gameManager.getInteractor();
+        GameInteractor interactor = gameManager.getInteractor();
         if (interactor == null) {
             throw new IllegalStateException("interactor is not set");
         }

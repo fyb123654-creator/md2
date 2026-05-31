@@ -38,10 +38,10 @@ public class NetworkProtocol implements Serializable {
     // Empty constructor for deserialization
     public NetworkProtocol() {}
 
-    public static NetworkProtocol connect(String playerId) {
+    public static NetworkProtocol connect(String playerName) {
         NetworkProtocol msg = new NetworkProtocol();
         msg.type = MessageType.CONNECT;
-        msg.playerId = playerId;
+        msg.content = playerName;
         return msg;
     }
 

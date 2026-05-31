@@ -34,6 +34,7 @@ public class GameServer {
     private OnGameStateChangeListener listener;
     private volatile GameStateData lastBroadcastState;
     private final boolean[] readyFlags;
+    private final String[] playerNames;
 
     // Payment flow state (single payment)
     private boolean isWaitingForJsn = false;
@@ -98,16 +99,17 @@ public class GameServer {
         void onGameOver(String winner);
     }
 
-    public GameServer(int port, int playerCount) {
+    public GameServer(int port, int playerCount, String hostName) {
         this.port = port;
         this.expectedPlayerCount = playerCount;
         this.clients = new ArrayList<>();
         this.executorService = Executors.newFixedThreadPool(10);
         this.gameManager = new GameManager();
-        gameManager.setPlayerCount(playerCount);
         this.readyFlags = new boolean[playerCount];
+        this.playerNames = new String[playerCount];
         // Host is Player 1 (index 0)
         this.readyFlags[0] = false;
+        this.playerNames[0] = (hostName == null || hostName.isBlank()) ? "Player 1" : hostName.trim();
     }
 
     public void setListener(OnGameStateChangeListener listener) {
@@ -117,12 +119,10 @@ public class GameServer {
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         running = true;
-        System.out.println("Server started on port " + port);
         executorService.submit(() -> {
             while (running) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    System.out.println("New client connected: " + clientSocket.getInetAddress());
                     if (clients.size() >= expectedPlayerCount - 1) {
                         ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
                         out.writeObject(NetworkProtocol.connectAck(false, "Game is full"));
@@ -133,9 +133,6 @@ public class GameServer {
                     ClientHandler handler = new ClientHandler(clientSocket, clients.size() + 1);
                     clients.add(handler);
                     executorService.submit(handler);
-                    if (listener != null) {
-                        listener.onClientConnected("Player " + (clients.size() + 1));
-                    }
                     broadcastRoomUpdate();
                 } catch (IOException e) {
                     if (running) e.printStackTrace();
@@ -145,9 +142,17 @@ public class GameServer {
     }
 
     private void startGameInternal() {
-        System.out.println("All players connected, starting game...");
         // Server-side start: start round, broadcast GAME_START and initial state
         try {
+            List<String> effectiveNames = new ArrayList<>();
+            for (int i = 0; i < expectedPlayerCount; i++) {
+                String name = playerNames[i];
+                if (name == null || name.isBlank()) {
+                    name = "Player " + (i + 1);
+                }
+                effectiveNames.add(name);
+            }
+            gameManager.setPlayerCount(expectedPlayerCount, effectiveNames);
             // Ensure startRound was called at least once
             if (gameManager.getCardManager() == null) {
                 gameManager.startRound();
@@ -360,11 +365,13 @@ public class GameServer {
         private ObjectOutputStream out;
         private int playerIndex;
         private boolean connected;
+        private boolean registered;
 
         public ClientHandler(Socket socket, int playerIndex) {
             this.socket = socket;
             this.playerIndex = playerIndex;
             this.connected = true;
+            this.registered = false;
 
             // Initialize streams in constructor to avoid early message loss
             if (socket != null) {
@@ -396,7 +403,6 @@ public class GameServer {
                     handleMessage(message);
                 }
             } catch (IOException | ClassNotFoundException e) {
-                if (connected) System.out.println("Player " + (playerIndex + 1) + " disconnected");
             } finally {
                 close();
             }
@@ -405,7 +411,22 @@ public class GameServer {
         private void handleMessage(NetworkProtocol message) {
             switch (message.getType()) {
                 case CONNECT:
-                    System.out.println("Player " + (playerIndex + 1) + " connected");
+                    String name = message.getContent();
+                    if (name == null || name.isBlank()) {
+                        name = "Player " + (playerIndex + 1);
+                    } else {
+                        name = name.trim();
+                    }
+                    if (playerIndex >= 0 && playerIndex < playerNames.length) {
+                        playerNames[playerIndex] = name;
+                    }
+                    if (!registered) {
+                        registered = true;
+                        if (listener != null) {
+                            listener.onClientConnected(name);
+                        }
+                        broadcastRoomUpdate();
+                    }
                     break;
                 case PLAYER_ACTION:
                     processPlayerAction(message.getContent());
@@ -423,7 +444,7 @@ public class GameServer {
                     handlePaymentResponse(message.getContent(), gameManager.getPlayersView().get(playerIndex));
                     break;
                 default:
-                    System.out.println("Unknown message type: " + message.getType());
+                    break;
             }
         }
 
@@ -636,7 +657,6 @@ public class GameServer {
 
         // ========== Core: handle player actions ==========
         private void processPlayerAction(String action) {
-            System.out.println("Player " + (playerIndex + 1) + " action: " + action);
             PlayerManagement currentPlayer = gameManager.getPlayersView().get(playerIndex);
 
             // 1) Handle Just Say No waiting
@@ -716,7 +736,17 @@ public class GameServer {
             try {
                 if ("END_TURN".equals(action)) {
                     gameManager.confirmCurrentPlayerTurnEnded();
-                    if (gameManager.canAdvanceTurn()) gameManager.advanceTurn();
+                    if (gameManager.canAdvanceTurn()) {
+                        gameManager.advanceTurn();
+                        broadcastGameState();
+                        return;
+                    }
+                    int handCount = currentPlayer.getHandCardCount();
+                    if (handCount > PlayerManagement.MAX_HAND_SIZE) {
+                        send(NetworkProtocol.error("Hand limit exceeded. Discard until you have 7 or fewer cards."));
+                    } else {
+                        send(NetworkProtocol.error("Cannot end turn right now."));
+                    }
                     broadcastGameState();
                     return;
                 }

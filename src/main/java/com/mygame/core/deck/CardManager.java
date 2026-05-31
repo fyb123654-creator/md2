@@ -64,7 +64,12 @@ public class CardManager {
 
     public Card drawCard() {
         if (drawPile.isEmpty()) {
-            return null;
+            if (discardPile.isEmpty()) {
+                return null;
+            }
+            drawPile.addAll(discardPile);
+            discardPile.clear();
+            Collections.shuffle(drawPile);
         }
         return drawPile.remove(drawPile.size() - 1);
     }

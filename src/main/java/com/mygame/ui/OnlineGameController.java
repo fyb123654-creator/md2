@@ -3,6 +3,7 @@ package com.mygame.ui;
 import com.mygame.network.GameClient;
 import com.mygame.network.GameServer;
 import com.mygame.network.dto.GameStateData;
+import com.mygame.app.AppSettings;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -37,7 +38,7 @@ public class OnlineGameController {
         isHost = true;
         localPlayerIndex = 0;
 
-        gameServer = new GameServer(port, playerCount);
+        gameServer = new GameServer(port, playerCount, AppSettings.getInstance().getPlayerName());
         gameServer.setListener(new GameServer.OnGameStateChangeListener() {
             @Override
             public void onStateChanged(GameStateData state) {

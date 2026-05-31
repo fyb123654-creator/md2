@@ -17,10 +17,6 @@ import javafx.scene.text.TextAlignment;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
-import javafx.scene.SnapshotParameters;
-import javafx.scene.image.ImageView;
-import javafx.scene.image.WritableImage;
-import javafx.scene.transform.Transform;
 import javafx.stage.Popup;
 
 /**
@@ -155,11 +151,6 @@ public class CardView extends Button {
     }
 
     private void installHoverZoom() {
-        // Previous "scale on hover" caused jitter/blur on some layouts because changing the node bounds
-        // can trigger enter/exit repeatedly (especially inside HBox/ScrollPane).
-        //
-        // New approach: show an enlarged preview popup (snapshot) near the cursor.
-        // This keeps the original layout stable and makes the preview crisp.
         if (cardContent == null) return;
 
         setOnMouseEntered(e -> showHoverPreview(e.getScreenX(), e.getScreenY()));
@@ -178,18 +169,51 @@ public class CardView extends Button {
             hoverPreviewPopup.getContent().clear();
         }
 
-        double scale = small ? 1.8 : 1.6;
-        SnapshotParameters params = new SnapshotParameters();
-        params.setTransform(Transform.scale(scale, scale));
-
-        WritableImage img = cardContent.snapshot(params, null);
-        ImageView iv = new ImageView(img);
-        iv.setSmooth(true);
-        iv.setPreserveRatio(true);
-        iv.setStyle("-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 18, 0.25, 0, 6);");
-
-        hoverPreviewPopup.getContent().add(iv);
+        VBox preview = createHoverPreviewContent();
+        preview.setStyle(preview.getStyle() + "; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 18, 0.25, 0, 6);");
+        hoverPreviewPopup.getContent().add(preview);
         hoverPreviewPopup.show(getScene().getWindow(), screenX + 18, screenY + 18);
+    }
+
+    private VBox createHoverPreviewContent() {
+        int width = small ? (int) Math.round(SMALL_CARD_WIDTH * 2.1) : (int) Math.round(CARD_WIDTH * 2.0);
+        int height = small ? (int) Math.round(SMALL_CARD_HEIGHT * 2.1) : (int) Math.round(CARD_HEIGHT * 2.0);
+
+        VBox preview = new VBox();
+        preview.setPrefSize(width, height);
+        preview.setMinSize(width, height);
+        preview.setMaxSize(width, height);
+
+        preview.setPadding(new Insets(12));
+        preview.setAlignment(javafx.geometry.Pos.CENTER);
+        preview.setSpacing(6);
+        preview.setStyle(getCardStyle());
+
+        HBox colorBar = createColorBar();
+        colorBar.setPrefHeight(12);
+        colorBar.setMinHeight(12);
+        colorBar.setMaxHeight(12);
+        preview.getChildren().add(colorBar);
+
+        Label nameLabel = new Label(card.getName());
+        nameLabel.setFont(Font.font("Arial", FontWeight.BOLD, 18));
+        nameLabel.setTextAlignment(TextAlignment.CENTER);
+        nameLabel.setWrapText(true);
+        nameLabel.setMaxWidth(width - 24);
+        nameLabel.setStyle("-fx-text-fill: #1a1a1a;");
+        preview.getChildren().add(nameLabel);
+
+        Label typeLabel = new Label(getCardTypeIcon());
+        typeLabel.setFont(Font.font("Arial", FontWeight.BOLD, 34));
+        typeLabel.setStyle("-fx-text-fill: #4a4a4a;");
+        preview.getChildren().add(typeLabel);
+
+        Label valueLabel = new Label(card.getValue() + "M");
+        valueLabel.setFont(Font.font("Arial", FontWeight.BOLD, 26));
+        valueLabel.setStyle("-fx-text-fill: #8b4513;");
+        preview.getChildren().add(valueLabel);
+
+        return preview;
     }
 
     private void moveHoverPreview(double screenX, double screenY) {

@@ -3,6 +3,7 @@ package com.mygame.ui;
 import com.mygame.cards.base.Card;
 import com.mygame.cards.property.BuildingCard;
 import com.mygame.cards.property.PropertyCard;
+import com.mygame.core.interaction.GameInteractor;
 import com.mygame.model.Color;
 import com.mygame.model.PlayerManagement;
 import com.mygame.model.PropertyZone;
@@ -15,7 +16,7 @@ import javafx.scene.control.ScrollPane;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class Interactor {
+public class Interactor implements GameInteractor {
 
     public List<Card> showSelectableAssets(PlayerManagement targetPlayer, int requiredAmount) {
         if (targetPlayer == null) throw new IllegalArgumentException("targetPlayer cannot be null");
@@ -146,6 +147,7 @@ public class Interactor {
         return result.orElseGet(ArrayList::new);
     }
 
+    @Override
     public Card choicePorperty(PlayerManagement targetPlayer) {
         if (targetPlayer == null) throw new IllegalArgumentException("targetPlayer cannot be null");
 
@@ -221,6 +223,7 @@ public class Interactor {
         return result.orElse(null);
     }
 
+    @Override
     public PropertyZone choicePropertyZone(PlayerManagement player) {
         if (player == null) throw new IllegalArgumentException("player cannot be null");
 
@@ -287,6 +290,7 @@ public class Interactor {
         return result.orElse(null);
     }
 
+    @Override
     public PropertyZone choiceBuildingPropertyZone(PlayerManagement player, Card buildingCard) {
         if (player == null) throw new IllegalArgumentException("player cannot be null");
         if (buildingCard == null) throw new IllegalArgumentException("buildingCard cannot be null");
@@ -359,6 +363,7 @@ public class Interactor {
         return result.orElse(null);
     }
 
+    @Override
     public PlayerManagement choiceTargetPlayer(PlayerManagement currentPlayer, List<PlayerManagement> allPlayers) {
         if (currentPlayer == null) throw new IllegalArgumentException("currentPlayer cannot be null");
         if (allPlayers == null) throw new IllegalArgumentException("allPlayers cannot be null");
@@ -380,6 +385,7 @@ public class Interactor {
         return candidates.stream().filter(p -> p.getName().equals(selectedName)).findFirst().orElse(null);
     }
 
+    @Override
     public boolean confirmJustSayNo(PlayerManagement targetPlayer, PlayerManagement sourcePlayer, String actionName) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Just Say No");
@@ -389,6 +395,7 @@ public class Interactor {
         return result.isPresent() && result.get() == ButtonType.OK;
     }
 
+    @Override
     public boolean confirmUseDoubleTheRent(PlayerManagement currentPlayer, Color selectedColor, int baseRentAmount) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Double The Rent");
@@ -398,6 +405,7 @@ public class Interactor {
         return result.isPresent() && result.get() == ButtonType.OK;
     }
 
+    @Override
     public Card choiceStealablePropertyCard(PlayerManagement targetPlayer) {
         if (targetPlayer == null) throw new IllegalArgumentException("targetPlayer cannot be null");
 

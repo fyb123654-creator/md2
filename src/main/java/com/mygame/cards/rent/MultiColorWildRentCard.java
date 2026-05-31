@@ -3,10 +3,10 @@ package com.mygame.cards.rent;
 import com.mygame.cards.base.ActionCard;
 import com.mygame.cards.base.CardType;
 import com.mygame.core.GameManager;
+import com.mygame.core.interaction.GameInteractor;
 import com.mygame.model.Color;
 import com.mygame.model.PlayerManagement;
 import com.mygame.model.PropertyZone;
-import com.mygame.ui.Interactor;
 
 public final class MultiColorWildRentCard implements ActionCard {
     private final String id;
@@ -46,7 +46,7 @@ public final class MultiColorWildRentCard implements ActionCard {
         }
 
         PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
-        Interactor interactor = gameManager.getInteractor();
+        GameInteractor interactor = gameManager.getInteractor();
         if (interactor == null) {
             throw new IllegalStateException("interactor is not set");
         }

@@ -1,6 +1,7 @@
 package com.mygame.ui;
 
 import com.mygame.app.GameApp;
+import com.mygame.app.AppSettings;
 import com.mygame.network.GameClient;
 import com.mygame.network.GameServer;
 import com.mygame.network.dto.GameStateData;
@@ -168,7 +169,7 @@ public class NetworkGameController {
                 startButton.setDisable(true);
             }
 
-            gameServer = new GameServer(port, playerCount);
+            gameServer = new GameServer(port, playerCount, AppSettings.getInstance().getPlayerName());
             gameServer.setListener(new GameServer.OnGameStateChangeListener() {
                 @Override
                 public void onStateChanged(GameStateData state) {
@@ -244,6 +245,7 @@ public class NetworkGameController {
             }
 
             gameClient = new GameClient(address, port);
+            gameClient.setLocalPlayerName(AppSettings.getInstance().getPlayerName());
             gameClient.setListener(new GameClient.OnMessageReceivedListener() {
                 @Override
                 public void onConnected() {
@@ -320,7 +322,12 @@ public class NetworkGameController {
 
                 @Override
                 public void onChatMessage(String playerId, String message) {
-                    // Chat feature placeholder
+                    Platform.runLater(() -> {
+                        GameController controller = GameController.getInstance();
+                        if (controller != null) {
+                            controller.receiveChatMessage(playerId, message);
+                        }
+                    });
                 }
 
                 @Override
@@ -526,13 +533,11 @@ public class NetworkGameController {
             boolean isLocalPlayer = (i == localPlayerIndex);
 
             if (isLocalPlayer) {
-                System.out.println("Local Player " + (i + 1) + ": " + player.getPlayerName()
-                        + " | Hand: " + player.getHandCardCount()
-                        + " | Bank cards: " + player.getBankCards().size());
-            } else {
-                System.out.println("Opponent " + (i + 1) + ": " + player.getPlayerName()
-                        + " | Hand: " + player.getHandCardCount()
-                        + " | Bank cards: " + player.getBankCards().size());
+                if (statusLabel != null) {
+                    statusLabel.setText("You: " + player.getPlayerName()
+                            + " | Hand: " + player.getHandCardCount()
+                            + " | Bank cards: " + player.getBankCards().size());
+                }
             }
         }
     }

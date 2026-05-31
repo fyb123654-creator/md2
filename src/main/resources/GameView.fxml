@@ -3,6 +3,8 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
@@ -12,16 +14,17 @@
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.mygame.ui.GameController"
             fitToWidth="true"
+            fitToHeight="true"
             hbarPolicy="AS_NEEDED"
             vbarPolicy="AS_NEEDED"
             prefHeight="720.0" prefWidth="1280.0">
     <content>
-        <BorderPane prefHeight="720.0" prefWidth="1280.0">
+        <BorderPane prefHeight="720.0" prefWidth="1280.0" styleClass="game-root">
 
     <top>
         <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED">
             <content>
-                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: #f8f8f8;">
+                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: rgba(255,255,255,0.78); -fx-background-radius: 14;">
                     <Label text="Other Players" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
                     <VBox fx:id="opponentAreaBox" spacing="12"/>
                 </VBox>
@@ -30,10 +33,21 @@
     </top>
 
     <center>
-        <VBox alignment="CENTER" spacing="18" style="-fx-padding: 18px;">
+        <VBox alignment="CENTER" spacing="18" style="-fx-padding: 18px; -fx-background-color: rgba(255,255,255,0.62); -fx-background-radius: 14;">
             <Label fx:id="clientInfoLabel" text="Player" style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2f4f6f;"/>
-            <Label fx:id="turnInfoLabel" text="Game not started" style="-fx-font-size: 24px;"/>
+            <HBox alignment="CENTER" spacing="12">
+                <Label fx:id="turnInfoLabel" text="Game not started" style="-fx-font-size: 24px;"/>
+                <Button fx:id="helpButton" text="Help" onAction="#onHelpClicked" styleClass="primary"/>
+            </HBox>
+            <Label fx:id="hintLabel" text="" styleClass="hint important"/>
             <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" style="-fx-font-size: 18px; -fx-padding: 10 22; -fx-background-color: linear-gradient(#ffcd72, #f0a93b); -fx-text-fill: #2b2b2b; -fx-font-weight: bold; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #c9851f;"/>
+            <TextArea fx:id="logArea" editable="false" wrapText="true" prefRowCount="6" prefWidth="860.0"/>
+            <Label text="Chat" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+            <TextArea fx:id="chatArea" editable="false" wrapText="true" prefRowCount="6" prefWidth="860.0"/>
+            <HBox spacing="10" alignment="CENTER">
+                <TextField fx:id="chatInput" promptText="Type a message..." HBox.hgrow="ALWAYS"/>
+                <Button fx:id="sendChatButton" text="Send" onAction="#onSendChatClicked" styleClass="primary"/>
+            </HBox>
             <HBox fx:id="handActionBox" alignment="CENTER_LEFT" spacing="14" style="-fx-padding: 0 0 0 0;"/>
         </VBox>
     </center>
@@ -41,7 +55,7 @@
     <bottom>
         <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER">
             <content>
-                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: #f0f0f0;">
+                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: rgba(255,255,255,0.78); -fx-background-radius: 14;">
                     <VBox spacing="8">
                         <Label text="My Hand" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
                         <HBox fx:id="myHandBox" alignment="CENTER_LEFT" spacing="10"/>
