@@ -33,6 +33,7 @@ public class GameStateData implements Serializable {
     private boolean gameOver;
     private String winner;
     private List<PlayerData> players;
+    private List<String> eventLog;
     private int drawPileCount;
     private int discardPileCount;
 
@@ -58,6 +59,7 @@ public class GameStateData implements Serializable {
         
         // Deck info
         if (gameManager.getCardManager() != null) {
+            data.eventLog = new ArrayList<>(gameManager.getEventLog());
             data.drawPileCount = gameManager.getCardManager().getDrawPileSize();
             data.discardPileCount = gameManager.getCardManager().getDiscardPileSize();
         }
@@ -83,6 +85,8 @@ public class GameStateData implements Serializable {
     public int getDrawPileCount() { return drawPileCount; }
     public void setDrawPileCount(int drawPileCount) { this.drawPileCount = drawPileCount; }
     public int getDiscardPileCount() { return discardPileCount; }
+    public List<String> getEventLog() { return eventLog; }
+    public void setEventLog(List<String> eventLog) { this.eventLog = eventLog; }
     public void setDiscardPileCount(int discardPileCount) { this.discardPileCount = discardPileCount; }
 
     /**

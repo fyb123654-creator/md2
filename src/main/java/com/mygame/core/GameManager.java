@@ -128,7 +128,17 @@ public class GameManager {
         eventListeners.remove(listener);
     }
 
+    private final List<String> eventLog = new ArrayList<>();
+
+    public List<String> getEventLog() {
+        return Collections.unmodifiableList(eventLog);
+    }
+
     private void fireEvent(GameEventType type, String message) {
+        eventLog.add(message);
+        if (eventLog.size() > 200) {
+            eventLog.remove(0);
+        }
         if (eventListeners.isEmpty()) {
             return;
         }

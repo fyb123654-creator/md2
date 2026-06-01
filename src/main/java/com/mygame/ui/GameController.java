@@ -316,6 +316,14 @@ public class GameController {
 
         if (isOnlineMode && !isHost()) {
             syncLocalGameManagerFromState(state);
+            if (state.getEventLog() != null) {
+                logLines.clear();
+                logLines.addAll(state.getEventLog());
+                if (logArea != null) {
+                    logArea.setText(String.join("\n", logLines));
+                    logArea.positionCaret(logArea.getText().length());
+                }
+            }
         }
 
         boolean wasMyTurn = isMyTurn;
