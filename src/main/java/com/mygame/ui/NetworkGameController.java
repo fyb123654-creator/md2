@@ -204,6 +204,16 @@ public class NetworkGameController {
                         statusLabel.setText("Game Over! Winner: " + winner);
                     });
                 }
+
+                @Override
+                public void onChatMessage(String playerId, String message) {
+                    Platform.runLater(() -> {
+                        GameController controller = GameController.getInstance();
+                        if (controller != null) {
+                            controller.receiveChatMessage(playerId, message);
+                        }
+                    });
+                }
             });
 
             gameServer.start();

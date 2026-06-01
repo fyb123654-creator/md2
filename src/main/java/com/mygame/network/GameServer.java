@@ -97,6 +97,7 @@ public class GameServer {
         void onClientConnected(String playerName);
         void onGameStarted();
         void onGameOver(String winner);
+        default void onChatMessage(String playerId, String message) {}
     }
 
     public GameServer(int port, int playerCount, String hostName) {
@@ -433,6 +434,9 @@ public class GameServer {
                     break;
                 case CHAT_MESSAGE:
                     broadcast(NetworkProtocol.chat(message.getPlayerId(), message.getContent()));
+                    if (listener != null) {
+                        listener.onChatMessage(message.getPlayerId(), message.getContent());
+                    }
                     break;
                 case TOGGLE_READY:
                     handleToggleReady(message.getContent());
