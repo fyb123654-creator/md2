@@ -16,6 +16,7 @@ import com.mygame.model.PropertyZone;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +48,7 @@ public class GameStateData implements Serializable {
         
         data.currentPlayerIndex = gameManager.getCurrentPlayerIndex();
         data.playedCardsThisTurn = gameManager.getPlayedCardsThisTurn();
-        data.maxPlayCountPerTurn = 3; // MAX_PLAY_COUNT_PER_TURN
+        data.maxPlayCountPerTurn = GameManager.MAX_PLAY_COUNT_PER_TURN;
         data.gameStarted = true;
         data.gameOver = gameManager.isGameOver();
         data.winner = gameManager.hasWinner() ? gameManager.getWinner().getName() : null;
@@ -227,41 +228,33 @@ public class GameStateData implements Serializable {
             if (CardType.BUILDING.name().equals(cardType) && addedRentValue > 0) {
                 return new BuildingCard(cardId, name, value, addedRentValue);
             }
-
             if (referenceDeck == null) {
                 referenceDeck = GameManager.createGameCardManager().getDrawPileView();
             }
             for (Card realCard : referenceDeck) {
                 if (realCard.getId().equals(this.cardId)) {
-
-                    // Sync active color
                     if (this.color != null) {
-
-                        Color activeColor =
-                                Color.valueOf(this.color);
-
-                        if (realCard instanceof BiColorWildPropertyCard bwc) {
-
-                            bwc.setCurrentActiveColor(
-                                    activeColor
-                            );
-                        }
-
-                        else if (realCard instanceof MultiColorWildPropertyCard mwc) {
-
-                            mwc.setCurrentActiveColor(
-                                    activeColor
-                            );
-                        }
-
-                        else if (realCard instanceof BiColorRentCard brc) {
-
-                            brc.setSelectedColor(
-                                    activeColor
-                            );
+                        Color activeColor = Color.valueOf(this.color);
+                        if (realCard instanceof BiColorWildPropertyCard realBi) {
+                            Color[] colors = realBi.getPlayableColors().toArray(new Color[0]);
+                            BiColorWildPropertyCard copy = new BiColorWildPropertyCard(
+                                    realCard.getId(), realCard.getName(), realCard.getValue(),
+                                    colors[0], colors[1], activeColor, realBi.getRentValues());
+                            return copy;
+                        } else if (realCard instanceof MultiColorWildPropertyCard realMulti) {
+                            MultiColorWildPropertyCard copy = new MultiColorWildPropertyCard(
+                                    realCard.getId(), realCard.getName(), realCard.getValue(),
+                                    realMulti.getRentValues());
+                            copy.setCurrentActiveColor(activeColor);
+                            return copy;
+                        } else if (realCard instanceof BiColorRentCard brc) {
+                            BiColorRentCard copy = new BiColorRentCard(
+                                    realCard.getId(), realCard.getName(), realCard.getValue(),
+                                    new HashSet<>(brc.getValidColors()));
+                            copy.setSelectedColor(activeColor);
+                            return copy;
                         }
                     }
-
                     return realCard;
                 }
             }

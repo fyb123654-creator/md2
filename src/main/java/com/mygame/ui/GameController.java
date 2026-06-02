@@ -222,17 +222,20 @@ public class GameController {
         appendChatLine(AppSettings.getInstance().getPlayerName(), message);
     }
 
+    private void trimAndRefresh(List<String> lines, TextArea area) {
+        while (lines.size() > GameManager.MAX_LOG_LINES) {
+            lines.remove(0);
+        }
+        if (area != null) {
+            area.setText(String.join("\n", lines));
+            area.positionCaret(area.getText().length());
+        }
+    }
+
     private void appendChatLine(String playerId, String message) {
         String line = (playerId == null || playerId.isBlank() ? "Player" : playerId) + ": " + (message == null ? "" : message);
         chatLines.add(line);
-        int maxLines = 200;
-        while (chatLines.size() > maxLines) {
-            chatLines.remove(0);
-        }
-        if (chatArea != null) {
-            chatArea.setText(String.join("\n", chatLines));
-            chatArea.positionCaret(chatArea.getText().length());
-        }
+        trimAndRefresh(chatLines, chatArea);
     }
 
     private int promptForOfflinePlayerCount() {
@@ -300,14 +303,7 @@ public class GameController {
             return;
         }
         logLines.add(message);
-        int maxLines = 200;
-        while (logLines.size() > maxLines) {
-            logLines.remove(0);
-        }
-        if (logArea != null) {
-            logArea.setText(String.join("\n", logLines));
-            logArea.positionCaret(logArea.getText().length());
-        }
+        trimAndRefresh(logLines, logArea);
     }
 
     public void updateFromServerState(GameStateData state) {
@@ -319,10 +315,7 @@ public class GameController {
             if (state.getEventLog() != null) {
                 logLines.clear();
                 logLines.addAll(state.getEventLog());
-                if (logArea != null) {
-                    logArea.setText(String.join("\n", logLines));
-                    logArea.positionCaret(logArea.getText().length());
-                }
+                trimAndRefresh(logLines, logArea);
             }
         }
 
@@ -1845,22 +1838,7 @@ public class GameController {
     }
 
     private int calculateAssetTotalValue(PlayerManagement player) {
-        int total = 0;
-        for (Card card : player.getBankCardsView()) {
-            total += card.getValue();
-        }
-        for (PropertyZone zone : player.getPropertyZonesView().values()) {
-            for (PropertyCard propertyCard : zone.getPropertiesView()) {
-                total += propertyCard.getValue();
-            }
-            if (zone.getHouse() != null) {
-                total += zone.getHouse().getValue();
-            }
-            if (zone.getHotel() != null) {
-                total += zone.getHotel().getValue();
-            }
-        }
-        return total;
+        return player.calculateAssetTotalValue();
     }
 
     public void handleAskJustSayNo(String sourcePlayer, String actionName) {

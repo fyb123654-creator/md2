@@ -22,8 +22,11 @@ import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class GameServer {
+    private static final Logger LOGGER = Logger.getLogger(GameServer.class.getName());
     private ServerSocket serverSocket;
     private ExecutorService executorService;
     private List<ClientHandler> clients;
@@ -39,7 +42,7 @@ public class GameServer {
     // Payment flow state (single payment)
     private boolean isWaitingForJsn = false;
     private boolean isWaitingForPayment = false;
-    private String waitingVictimId = null;
+    private String pendingVictimId = null;
     private String pendingCollectorId = null;
     private int pendingPaymentAmount = 0;
     private String pendingActionName = "";
@@ -78,7 +81,7 @@ public class GameServer {
     private void clearSinglePaymentState() {
         isWaitingForJsn = false;
         isWaitingForPayment = false;
-        waitingVictimId = null;
+        pendingVictimId = null;
         pendingCollectorId = null;
         pendingPaymentAmount = 0;
         pendingActionName = "";
@@ -104,7 +107,7 @@ public class GameServer {
         this.port = port;
         this.expectedPlayerCount = playerCount;
         this.clients = new ArrayList<>();
-        this.executorService = Executors.newFixedThreadPool(10);
+        this.executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         this.gameManager = new GameManager();
         this.readyFlags = new boolean[playerCount];
         this.playerNames = new String[playerCount];
@@ -136,7 +139,7 @@ public class GameServer {
                     executorService.submit(handler);
                     broadcastRoomUpdate();
                 } catch (IOException e) {
-                    if (running) e.printStackTrace();
+                    if (running) LOGGER.log(Level.WARNING, "Error accepting client connection", e);
                 }
             }
         });
@@ -159,7 +162,7 @@ public class GameServer {
                 gameManager.startRound();
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Failed to start game", e);
         }
 
         broadcast(NetworkProtocol.gameStart(expectedPlayerCount));
@@ -233,7 +236,7 @@ public class GameServer {
             if (serverSocket != null) serverSocket.close();
             for (ClientHandler client : clients) client.close();
             executorService.shutdown();
-        } catch (IOException e) { e.printStackTrace(); }
+        } catch (IOException e) { LOGGER.log(Level.WARNING, "Error closing server resources", e); }
     }
 
     public GameManager getGameManager() { return gameManager; }
@@ -287,7 +290,7 @@ public class GameServer {
     private void initiatePaymentAgainstVictim(PlayerManagement collector, PlayerManagement victim, int amount, String actionName) {
         isWaitingForJsn = true;
         isWaitingForPayment = false;
-        waitingVictimId = victim.getPlayerId();
+        pendingVictimId = victim.getPlayerId();
         pendingCollectorId = collector.getPlayerId();
         pendingPaymentAmount = amount;
         pendingActionName = actionName;
@@ -347,17 +350,11 @@ public class GameServer {
     }
 
     private Color findColorOfProperty(PlayerManagement player, Card card) {
-        for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
-            if (entry.getValue().getPropertiesView().contains(card)) return entry.getKey();
-        }
-        return null;
+        return player.findColorOfProperty(card);
     }
 
     private Card findJustSayNoCard(PlayerManagement player) {
-        for (Card c : player.getHandCardsView()) {
-            if (c instanceof JustSayNoCard) return c;
-        }
-        return null;
+        return player.findJustSayNoCard();
     }
 
     private class ClientHandler implements Runnable {
@@ -383,7 +380,7 @@ public class GameServer {
                     out.flush();
                 } catch (IOException e) {
                     connected = false;
-                    e.printStackTrace();
+                    LOGGER.log(Level.WARNING, "Failed to initialize streams for player " + playerIndex, e);
                 }
             }
             if (playerIndex >= 0 && playerIndex < readyFlags.length) {
@@ -404,6 +401,10 @@ public class GameServer {
                     handleMessage(message);
                 }
             } catch (IOException | ClassNotFoundException e) {
+                if (connected) {
+                    String name = playerIndex >= 0 && playerIndex < playerNames.length ? playerNames[playerIndex] : String.valueOf(playerIndex);
+                    LOGGER.log(Level.WARNING, "Connection error for player " + name, e);
+                }
             } finally {
                 close();
             }
@@ -564,7 +565,7 @@ public class GameServer {
 
         private void resolvePaymentAfterJustSayNoDeclined() {
             PlayerManagement collector = findPlayerById(pendingCollectorId);
-            PlayerManagement victim = findPlayerById(waitingVictimId);
+            PlayerManagement victim = findPlayerById(pendingVictimId);
             if (collector == null || victim == null) {
                 clearSinglePaymentState();
                 continueBatchOrBroadcast();
@@ -584,7 +585,7 @@ public class GameServer {
             NetworkProtocol req = new NetworkProtocol();
             req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
             req.setContent(pendingPaymentAmount + ":" + collector.getName());
-            sendToPlayer(waitingVictimId, req);
+            sendToPlayer(pendingVictimId, req);
         }
 
         private void continueBatchOrBroadcast() {
@@ -597,44 +598,11 @@ public class GameServer {
         }
 
         private int calculateAssetTotalValue(PlayerManagement player) {
-            int total = 0;
-            for (Card card : player.getBankCardsView()) {
-                total += card.getValue();
-            }
-            for (PropertyZone zone : player.getPropertyZonesView().values()) {
-                for (PropertyCard propertyCard : zone.getPropertiesView()) {
-                    total += propertyCard.getValue();
-                }
-                if (zone.getHouse() != null) {
-                    total += zone.getHouse().getValue();
-                }
-                if (zone.getHotel() != null) {
-                    total += zone.getHotel().getValue();
-                }
-            }
-            return total;
+            return player.calculateAssetTotalValue();
         }
 
         private void transferAllAssetsToCollectorHand(PlayerManagement collector, PlayerManagement victim) {
-            // Bank
-            List<Card> bankCards = new ArrayList<>(victim.getBankCardsView());
-            for (Card c : bankCards) {
-                if (victim.removeFromBank(c)) {
-                    collector.addToHand(c);
-                }
-            }
-            // Properties + house/hotel
-            List<Card> props = new ArrayList<>();
-            for (PropertyZone zone : victim.getPropertyZonesView().values()) {
-                props.addAll(zone.getPropertiesView());
-                if (zone.getHouse() != null) props.add(zone.getHouse());
-                if (zone.getHotel() != null) props.add(zone.getHotel());
-            }
-            for (Card c : props) {
-                if (victim.removeFromPropertyZones(c)) {
-                    collector.addToHand(c);
-                }
-            }
+            victim.transferAllAssetsTo(collector);
         }
 
         private void handleToggleReady(String content) {
@@ -679,7 +647,7 @@ public class GameServer {
 
             // 2) Handle payment waiting (includes JSN and payment)
             if (isWaitingForJsn || isWaitingForPayment) {
-                String expectedResponderId = isWaitingForJsn ? pendingPaymentJsnResponderId : waitingVictimId;
+                String expectedResponderId = isWaitingForJsn ? pendingPaymentJsnResponderId : pendingVictimId;
                 if (!currentPlayer.getPlayerId().equals(expectedResponderId)) {
                     send(NetworkProtocol.error("Waiting for another player's response"));
                     return;
@@ -692,10 +660,10 @@ public class GameServer {
                             currentPlayer.removeFromHand(jsnCard);
                             gameManager.getCardManager().playCard(jsnCard);
 
-                            pendingPaymentCanceledByJsn = currentPlayer.getPlayerId().equals(waitingVictimId);
+                            pendingPaymentCanceledByJsn = currentPlayer.getPlayerId().equals(pendingVictimId);
                             PlayerManagement nextResponder = pendingPaymentCanceledByJsn
                                     ? findPlayerById(pendingCollectorId)
-                                    : findPlayerById(waitingVictimId);
+                                    : findPlayerById(pendingVictimId);
                             if (nextResponder != null && findJustSayNoCard(nextResponder) != null) {
                                 pendingPaymentJsnResponderId = nextResponder.getPlayerId();
                                 NetworkProtocol req = new NetworkProtocol();
@@ -888,7 +856,7 @@ public class GameServer {
                                 gameManager.removeFromCurrentPlayerHand(targetCard);
                                 gameManager.getCardManager().playCard(targetCard);
                                 gameManager.recordPlayedCardAfterExternalResolution();
-                                initiatePaymentAgainstVictim(currentPlayer, victim, 5, "Debt Collector");
+                                initiatePaymentAgainstVictim(currentPlayer, victim, GameManager.DEBT_COLLECTOR_AMOUNT, "Debt Collector");
                             }
                         } else if (targetCard instanceof ItsMyBirthdayCard) {
                             gameManager.removeFromCurrentPlayerHand(targetCard);
@@ -899,7 +867,7 @@ public class GameServer {
                                 if (p != currentPlayer) victims.add(p);
                             }
                             if (!victims.isEmpty()) {
-                                initiateBatchPayment(currentPlayer, victims, 2, "It's My Birthday");
+                                initiateBatchPayment(currentPlayer, victims, GameManager.BIRTHDAY_AMOUNT, "It's My Birthday");
                             } else {
                                 broadcastGameState();
                             }
@@ -916,7 +884,7 @@ public class GameServer {
                         send(NetworkProtocol.error("Unknown action type"));
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                LOGGER.log(Level.WARNING, "Action failed: " + e.getMessage(), e);
                 send(NetworkProtocol.error("Action failed: " + e.getMessage()));
             }
         }
@@ -1008,7 +976,7 @@ public class GameServer {
                 return;
             }
 
-            int addedRent = (buildingActionCard instanceof HotelCard) ? 5 : 3;
+            int addedRent = (buildingActionCard instanceof HotelCard) ? GameManager.HOTEL_ADDED_RENT : GameManager.HOUSE_ADDED_RENT;
             BuildingCard placed = new BuildingCard(
                     buildingActionCard.getId(),
                     buildingActionCard.getName(),
@@ -1107,7 +1075,7 @@ public class GameServer {
                     out.writeObject(message);
                     out.flush();
                 }
-            } catch (IOException e) { e.printStackTrace(); }
+            } catch (IOException e) { LOGGER.log(Level.WARNING, "Failed to send message to player " + playerIndex, e); }
         }
 
         public void close() {
@@ -1116,7 +1084,7 @@ public class GameServer {
                 if (in != null) in.close();
                 if (out != null) out.close();
                 if (socket != null) socket.close();
-            } catch (IOException e) {}
+            } catch (IOException e) { LOGGER.log(Level.FINE, "Error closing client socket", e); }
         }
 
         public int getPlayerIndex() { return playerIndex; }

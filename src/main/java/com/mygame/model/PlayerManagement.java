@@ -311,6 +311,75 @@ public class PlayerManagement {
         return Math.max(0, getHandCardCount() - MAX_HAND_SIZE);
     }
 
+    /**
+     * Returns the total monetary value of all assets (bank + properties + buildings).
+     */
+    public int calculateAssetTotalValue() {
+        int total = 0;
+        for (Card card : bankCards) {
+            total += card.getValue();
+        }
+        for (PropertyZone zone : propertyZones.values()) {
+            for (PropertyCard pc : zone.getPropertiesView()) {
+                total += pc.getValue();
+            }
+            if (zone.getHouse() != null) {
+                total += zone.getHouse().getValue();
+            }
+            if (zone.getHotel() != null) {
+                total += zone.getHotel().getValue();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Transfers all assets (bank + properties + buildings) from this player to the collector's hand.
+     */
+    public void transferAllAssetsTo(PlayerManagement collector) {
+        List<Card> bankCopy = new ArrayList<>(bankCards);
+        for (Card c : bankCopy) {
+            if (removeFromBank(c)) {
+                collector.addToHand(c);
+            }
+        }
+        List<Card> props = new ArrayList<>();
+        for (PropertyZone zone : propertyZones.values()) {
+            props.addAll(zone.getPropertiesView());
+            if (zone.getHouse() != null) props.add(zone.getHouse());
+            if (zone.getHotel() != null) props.add(zone.getHotel());
+        }
+        for (Card c : props) {
+            if (removeFromPropertyZones(c)) {
+                collector.addToHand(c);
+            }
+        }
+    }
+
+    /**
+     * Finds a Just Say No card in hand, or null if none.
+     */
+    public Card findJustSayNoCard() {
+        for (Card c : handCards) {
+            if (c instanceof com.mygame.cards.action.JustSayNoCard) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the color of a property card owned by this player.
+     */
+    public Color findColorOfProperty(Card card) {
+        for (var entry : propertyZones.entrySet()) {
+            if (entry.getValue().getPropertiesView().contains(card)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
     private static void validateCard(Card card) {
         if (card == null) {
             throw new IllegalArgumentException("card cannot be null");

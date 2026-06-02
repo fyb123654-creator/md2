@@ -19,11 +19,16 @@ import java.util.List;
 import java.util.Objects;
 
 public class GameManager {
-    private static final int MIN_PLAYER_COUNT = 2;
-    private static final int MAX_PLAYER_COUNT = 5;
-    private static final int INITIAL_HAND_CARD_COUNT = 5;
-    private static final int TURN_DRAW_CARD_COUNT = 2;
-    private static final int MAX_PLAY_COUNT_PER_TURN = 3;
+    public static final int MIN_PLAYER_COUNT = 2;
+    public static final int MAX_PLAYER_COUNT = 5;
+    public static final int INITIAL_HAND_CARD_COUNT = 5;
+    public static final int TURN_DRAW_CARD_COUNT = 2;
+    public static final int MAX_PLAY_COUNT_PER_TURN = 3;
+    public static final int HOUSE_ADDED_RENT = 3;
+    public static final int HOTEL_ADDED_RENT = 5;
+    public static final int DEBT_COLLECTOR_AMOUNT = 5;
+    public static final int BIRTHDAY_AMOUNT = 2;
+    public static final int MAX_LOG_LINES = 200;
   
     private int playerCount;
     private final List<PlayerManagement> players;
@@ -136,7 +141,7 @@ public class GameManager {
 
     private void fireEvent(GameEventType type, String message) {
         eventLog.add(message);
-        if (eventLog.size() > 200) {
+        if (eventLog.size() > MAX_LOG_LINES) {
             eventLog.remove(0);
         }
         if (eventListeners.isEmpty()) {
@@ -319,7 +324,7 @@ public class GameManager {
     public void advanceTurn() {
         ensureGameStarted();
         if (!canAdvanceTurn()) {
-            throw new IllegalStateException("current player must confirm turn end and have at most 7 hand cards before advancing turn");
+            throw new IllegalStateException("current player must confirm turn end and have at most " + PlayerManagement.MAX_HAND_SIZE + " hand cards before advancing turn");
         }
         currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
         beginCurrentPlayerTurn();
@@ -463,12 +468,7 @@ public class GameManager {
     }
 
     private Card findJustSayNoCard(PlayerManagement player) {
-        for (Card card : player.getHandCardsView()) {
-            if (card instanceof JustSayNoCard) {
-                return card;
-            }
-        }
-        return null;
+        return player.findJustSayNoCard();
     }
 
     public void removeFromCurrentPlayerHand(Card card) {
@@ -640,61 +640,15 @@ public class GameManager {
     }
 
     private int calculateAssetTotalValue(PlayerManagement player) {
-        int total = 0;
-
-        for (Card bankCard : player.getBankCardsView()) {
-            total += bankCard.getValue();
-        }
-
-        for (PropertyZone zone : player.getPropertyZonesView().values()) {
-            for (PropertyCard propertyCard : zone.getPropertiesView()) {
-                total += propertyCard.getValue();
-            }
-            if (zone.getHouse() != null) {
-                total += zone.getHouse().getValue();
-            }
-            if (zone.getHotel() != null) {
-                total += zone.getHotel().getValue();
-            }
-        }
-
-        return total;
+        return player.calculateAssetTotalValue();
     }
 
     private Color findPropertyCardColor(PlayerManagement player, Card card) {
-        for (java.util.Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
-            PropertyZone zone = entry.getValue();
-            if (zone.getPropertiesView().contains(card)) {
-                return entry.getKey();
-            }
-        }
-        return null;
+        return player.findColorOfProperty(card);
     }
 
     private void transferAllAssetsToCollectorHand(PlayerManagement collector, PlayerManagement payer) {
-        List<Card> bankCards = new ArrayList<>(payer.getBankCardsView());
-        for (Card card : bankCards) {
-            if (payer.removeFromBank(card)) {
-                collector.addToHand(card);
-            }
-        }
-
-        List<Card> propertyCards = new ArrayList<>();
-        for (PropertyZone zone : payer.getPropertyZonesView().values()) {
-            propertyCards.addAll(zone.getPropertiesView());
-            if (zone.getHouse() != null) {
-                propertyCards.add(zone.getHouse());
-            }
-            if (zone.getHotel() != null) {
-                propertyCards.add(zone.getHotel());
-            }
-        }
-
-        for (Card card : propertyCards) {
-            if (payer.removeFromPropertyZones(card)) {
-                collector.addToHand(card);
-            }
-        }
+        payer.transferAllAssetsTo(collector);
     }
 
     public void depositMoneyCard(Card card) {
@@ -738,9 +692,9 @@ public class GameManager {
         if (card instanceof BuildingCard existingBuildingCard) {
             buildingCard = existingBuildingCard;
         } else if (card instanceof HouseCard) {
-            buildingCard = new BuildingCard(card.getId(), card.getName(), card.getValue(), 3);
+            buildingCard = new BuildingCard(card.getId(), card.getName(), card.getValue(), HOUSE_ADDED_RENT);
         } else if (card instanceof HotelCard) {
-            buildingCard = new BuildingCard(card.getId(), card.getName(), card.getValue(), 5);
+            buildingCard = new BuildingCard(card.getId(), card.getName(), card.getValue(), HOTEL_ADDED_RENT);
         } else {
             throw new IllegalArgumentException("card is not a building card: " + card.getName());
         }

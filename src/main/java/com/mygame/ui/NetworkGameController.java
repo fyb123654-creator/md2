@@ -13,6 +13,8 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import java.util.ArrayList;
+import java.util.List;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -53,7 +55,7 @@ public class NetworkGameController {
     private Stage primaryStage;
     private boolean isMyTurn = false;
     private int playerCount = 2;
-    private final List<String> lobbyPlayers = new java.util.ArrayList<>();
+    private final List<String> lobbyPlayers = new ArrayList<>();
     private boolean localReady = false;
     private ScaleTransition readyAttention;
     private boolean choosingHostPlayerCount = false;

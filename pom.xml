@@ -4,7 +4,6 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 您的项目信息 -->
     <groupId>com.mygame</groupId>
     <artifactId>MonopolyGame</artifactId>
     <version>1.0-SNAPSHOT</version>
@@ -15,22 +14,24 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-    <!-- 依赖清单：告诉 Maven 去下载 JavaFX -->
     <dependencies>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
-            <version>25</version>
+            <version>25.0.3</version>
+            <classifier>mac-aarch64</classifier>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
-            <version>25</version>
+            <version>25.0.3</version>
+            <classifier>mac-aarch64</classifier>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-graphics</artifactId>
-            <version>25</version>
+            <version>25.0.3</version>
+            <classifier>mac-aarch64</classifier>
         </dependency>
     </dependencies>
 
@@ -50,7 +51,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.mygame.GameApp</mainClass>
+                    <mainClass>com.mygame.app.GameApp</mainClass>
                 </configuration>
             </plugin>
         </plugins>
