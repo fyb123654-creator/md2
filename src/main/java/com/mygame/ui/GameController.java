@@ -6,6 +6,7 @@ import com.mygame.cards.money.*;
 import com.mygame.cards.property.*;
 import com.mygame.cards.rent.*;
 import com.mygame.app.AppSettings;
+import com.mygame.app.GameApp;
 import com.mygame.core.GameManager;
 import com.mygame.core.events.GameEventListener;
 import com.mygame.model.*;
@@ -13,6 +14,7 @@ import com.mygame.network.GameClient;
 import com.mygame.network.GameServer;
 import com.mygame.network.dto.GameStateData;
 import com.mygame.network.protocol.NetworkProtocol;
+import com.mygame.rules.PropertyRentRules;
 import com.mygame.ui.components.CardView;
 import com.mygame.ui.model.PlayTarget;
 
@@ -20,6 +22,7 @@ import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.Dialog;
@@ -79,6 +82,8 @@ public class GameController {
     @FXML
     private Button helpButton;
     @FXML
+    private Button navBackButton;
+    @FXML
     private Label hintLabel;
     @FXML
     private TextArea logArea;
@@ -109,6 +114,7 @@ public class GameController {
     private boolean isMyTurn = false;
     private GameServer gameServer;
     private GameClient gameClient;
+    private GameApp gameApp;
 
     // Static instance used by network callbacks
     private static GameController instance;
@@ -284,9 +290,26 @@ public class GameController {
         for (int i = 0; i < visible; i++) {
             StackPane back = new StackPane();
             back.getStyleClass().add("card-back");
+            back.setStyle("-fx-background-color: linear-gradient(to bottom right, #ffffff, #dbeafe);"
+                    + " -fx-border-color: #3b82f6;"
+                    + " -fx-border-width: 3;"
+                    + " -fx-background-radius: 12;"
+                    + " -fx-border-radius: 12;"
+                    + " -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 10, 0.2, 0, 3);");
             back.setPrefSize(90, 130);
             back.setMinSize(90, 130);
             back.setMaxSize(90, 130);
+            VBox stamp = new VBox(2);
+            stamp.setAlignment(Pos.CENTER);
+            stamp.setMouseTransparent(true);
+            Label icon = new Label("🎴");
+            icon.setStyle("-fx-font-size: 22px; -fx-text-fill: #1d4ed8; -fx-font-weight: 900;");
+            Label title = new Label("MD");
+            title.setStyle("-fx-font-size: 14px; -fx-text-fill: #0f172a; -fx-font-weight: 900; -fx-letter-spacing: 1.2px;");
+            Label sub = new Label("DEAL");
+            sub.setStyle("-fx-font-size: 10px; -fx-text-fill: rgba(15,23,42,0.72); -fx-font-weight: 800; -fx-letter-spacing: 2px;");
+            stamp.getChildren().addAll(icon, title, sub);
+            back.getChildren().add(stamp);
             back.setTranslateX(i * 1.8);
             back.setTranslateY(-i * 1.8);
             pilePane.getChildren().add(back);
@@ -301,6 +324,28 @@ public class GameController {
 
     public static GameController getInstance() {
         return instance;
+    }
+
+    public void setGameApp(GameApp gameApp) {
+        this.gameApp = gameApp;
+    }
+
+    public void cleanup() {
+        if (gameClient != null) {
+            gameClient.close();
+        }
+        if (gameServer != null) {
+            if (isOnlineMode && isHost()) {
+                var gm = gameServer.getGameManager();
+                if (gm != null && gm.isGameStarted() && !gm.isGameOver()) {
+                    gameServer.handleHostLeaving();
+                } else {
+                    gameServer.stop();
+                }
+            } else {
+                gameServer.stop();
+            }
+        }
     }
 
     // ---------------- 1. Initialization ----------------
@@ -322,6 +367,9 @@ public class GameController {
 
         discardMode = false;
         selectedHandCard = null;
+        if (navBackButton != null) {
+            navBackButton.setText(isOnlineMode ? "Exit to Lobby" : "Exit to Menu");
+        }
 
         // Offline: create local GameManager.
         // Online host: use server-side GameManager instance.
@@ -463,6 +511,9 @@ public class GameController {
     public void setOnlineMode(boolean online, int playerIndex) {
         this.isOnlineMode = online;
         this.localPlayerIndex = playerIndex;
+        if (navBackButton != null) {
+            navBackButton.setText(online ? "Exit to Lobby" : "Exit to Menu");
+        }
 
         // Prevent the host from being blocked before the first GAME_STATE arrives.
         // The authoritative turn state will still be updated by updateFromServerState().
@@ -554,7 +605,7 @@ public class GameController {
                 if (endTurnButton != null) {
                     endTurnButton.setDisable(true);
                 }
-                showWinnerDialogIfNeeded();
+                showWinnerDialogAndExit(state.getWinner(), buildWinnerSummaryText(state));
             } else if (discardMode) {
                 hintLabel.setText(buildDiscardHintText());
             } else if (!isMyTurn) {
@@ -793,7 +844,7 @@ public class GameController {
                 if (endTurnButton != null) {
                     endTurnButton.setDisable(true);
                 }
-                showWinnerDialogIfNeeded();
+                showWinnerDialogAndExit(gameManager.getWinner().getName(), buildWinnerSummaryText());
             } else if (discardMode) {
                 hintLabel.setText(buildDiscardHintText());
             } else if (isOnlineMode && !isMyTurn) {
@@ -1295,15 +1346,17 @@ public class GameController {
         // 3) Ask whether to stack it
         String doubleCardId = "NONE";
         if (doubleCard != null && gameManager.getRemainingPlayCountThisTurn() >= 2) {
+            ButtonType yesButton = new ButtonType("Yes", ButtonBar.ButtonData.YES);
+            ButtonType noButton = new ButtonType("No", ButtonBar.ButtonData.NO);
             Alert alert = new Alert(
                     Alert.AlertType.CONFIRMATION,
                     "You have a Double The Rent card. Play it together to double this rent?",
-                    ButtonType.YES,
-                    ButtonType.NO
+                    yesButton,
+                    noButton
             );
             alert.setTitle("Double The Rent found");
             alert.setHeaderText(null);
-            if (alert.showAndWait().orElse(ButtonType.NO) == ButtonType.YES) {
+            if (alert.showAndWait().orElse(noButton) == yesButton) {
                 doubleCardId = doubleCard.getId();
             }
         }
@@ -1947,19 +2000,15 @@ public class GameController {
         return "Discard mode: hand " + current + "/" + PlayerManagement.MAX_HAND_SIZE + " (discard " + need + " card" + (need > 1 ? "s" : "") + ").";
     }
 
-    private void showWinnerDialogIfNeeded() {
+    private void showWinnerDialogAndExit(String winnerName, String summaryText) {
         if (winnerDialogShown) {
-            return;
-        }
-        if (gameManager == null || !gameManager.hasWinner()) {
             return;
         }
         winnerDialogShown = true;
 
-        String winnerName = gameManager.getWinner().getName();
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Game Over");
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.OK);
+        dialog.getDialogPane().getButtonTypes().add(new ButtonType("OK", ButtonBar.ButtonData.OK_DONE));
 
         VBox root = new VBox(10);
         root.getStyleClass().add("overlay");
@@ -1970,7 +2019,7 @@ public class GameController {
         Label winner = new Label(winnerName);
         winner.setStyle("-fx-font-size: 22px; -fx-font-weight: 700; -fx-text-fill: #1d4ed8;");
 
-        TextArea summary = new TextArea(buildWinnerSummaryText());
+        TextArea summary = new TextArea(summaryText == null ? "" : summaryText);
         summary.setEditable(false);
         summary.setWrapText(true);
         summary.setPrefRowCount(8);
@@ -1986,7 +2035,8 @@ public class GameController {
         } catch (Exception ignored) {
         }
 
-        dialog.show();
+        dialog.showAndWait();
+        Platform.runLater(this::onNavigateBackClicked);
     }
 
     private String buildWinnerSummaryText() {
@@ -1999,6 +2049,40 @@ public class GameController {
                     .append(" | Sets: ").append(p.getCompleteSetCount()).append("/").append(PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN)
                     .append(" | Bank: ").append(p.getBankTotalValue()).append("M")
                     .append(" | Hand: ").append(p.getHandCardCount())
+                    .append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private String buildWinnerSummaryText(GameStateData state) {
+        if (state == null || state.getPlayers() == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (GameStateData.PlayerData p : state.getPlayers()) {
+            int bank = 0;
+            if (p.getBankCards() != null) {
+                for (GameStateData.CardData c : p.getBankCards()) {
+                    bank += c.getValue();
+                }
+            }
+            int sets = 0;
+            if (p.getPropertyZones() != null) {
+                for (var entry : p.getPropertyZones().entrySet()) {
+                    Color color = entry.getKey();
+                    GameStateData.PropertyZoneData zone = entry.getValue();
+                    int count = zone == null || zone.getProperties() == null ? 0 : zone.getProperties().size();
+                    PropertyRentRules.RentRule rule = PropertyRentRules.RULES.get(color);
+                    if (rule != null && count >= rule.getMaxSetSize()) {
+                        sets++;
+                    }
+                }
+            }
+            int hand = p.getHandCards() == null ? 0 : p.getHandCards().size();
+            sb.append(p.getPlayerName())
+                    .append(" | Sets: ").append(sets).append("/").append(PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN)
+                    .append(" | Bank: ").append(bank).append("M")
+                    .append(" | Hand: ").append(hand)
                     .append("\n");
         }
         return sb.toString().trim();
@@ -2129,14 +2213,27 @@ public class GameController {
 
     private void updateClientInfo() {
         if (clientInfoLabel == null) return;
-        if (gameManager == null || localPlayerIndex < 0 || localPlayerIndex >= gameManager.getPlayersView().size()) {
+        if (gameManager == null) {
             clientInfoLabel.setText("Player");
             return;
         }
 
-        PlayerManagement localPlayer = gameManager.getPlayersView().get(localPlayerIndex);
-        clientInfoLabel.setText("You are: " + localPlayer.getName() + " | Complete sets: " + localPlayer.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
-        renderAvatarInto(clientAvatarPane, localPlayer.getAvatarId(), localPlayer.getName(), 20);
+        PlayerManagement shownPlayer;
+        String prefix;
+        if (!isOnlineMode) {
+            shownPlayer = gameManager.getCurrentPlayer();
+            prefix = "Current player: ";
+        } else {
+            if (localPlayerIndex < 0 || localPlayerIndex >= gameManager.getPlayersView().size()) {
+                clientInfoLabel.setText("Player");
+                return;
+            }
+            shownPlayer = gameManager.getPlayersView().get(localPlayerIndex);
+            prefix = "You are: ";
+        }
+
+        clientInfoLabel.setText(prefix + shownPlayer.getName() + " | Complete sets: " + shownPlayer.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
+        renderAvatarInto(clientAvatarPane, shownPlayer.getAvatarId(), shownPlayer.getName(), 20);
     }
 
     private void renderAvatarInto(StackPane container, int avatarId, String name, double radius) {
@@ -2149,6 +2246,19 @@ public class GameController {
         Label initial = new Label(extractInitial(name));
         initial.setStyle("-fx-text-fill: white; -fx-font-weight: 900; -fx-font-size: " + Math.max(12, (int) Math.round(radius)) + "px;");
         container.getChildren().addAll(circle, initial);
+    }
+
+    @FXML
+    private void onNavigateBackClicked() {
+        cleanup();
+        if (gameApp == null) {
+            return;
+        }
+        if (isOnlineMode) {
+            gameApp.showOnlineLobby();
+        } else {
+            gameApp.showMainMenu();
+        }
     }
 
     private String extractInitial(String name) {

@@ -6,6 +6,7 @@ import com.mygame.cards.base.CardType;
 import com.mygame.cards.money.MoneyCard;
 import com.mygame.cards.property.*;
 import com.mygame.cards.rent.*;
+import com.mygame.rules.PropertyRentRules;
 
 import javafx.animation.Interpolator;
 import javafx.animation.ScaleTransition;
@@ -75,6 +76,11 @@ public class CardView extends Button {
         HBox colorBar = createColorBar();
 
         cardContent.getChildren().add(colorBar);
+
+        Label setSizeLabel = createPropertySetSizeLabel();
+        if (setSizeLabel != null) {
+            cardContent.getChildren().add(setSizeLabel);
+        }
 
         Label nameLabel =
                 new Label(truncateName(card.getName()));
@@ -161,6 +167,16 @@ public class CardView extends Button {
         backContent.setMinSize(width, height);
         backContent.setMaxSize(width, height);
         backContent.getStyleClass().add("card-back");
+        Label backIcon = new Label("🎴");
+        backIcon.setFont(Font.font("Arial", FontWeight.BOLD, small ? 18 : 24));
+        backIcon.setStyle("-fx-text-fill: #1d4ed8;");
+        Label backTitle = new Label(small ? "MD" : "MONOPOLY");
+        backTitle.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, small ? 14 : 18));
+        backTitle.setStyle("-fx-text-fill: #1e293b; -fx-letter-spacing: 1.2px;");
+        Label backSub = new Label("DEAL");
+        backSub.setFont(Font.font("Arial", FontWeight.BOLD, small ? 10 : 12));
+        backSub.setStyle("-fx-text-fill: rgba(30,41,59,0.72); -fx-letter-spacing: 2px;");
+        backContent.getChildren().addAll(backIcon, backTitle, backSub);
 
         setFaceDown(false);
         installHoverZoom();
@@ -211,6 +227,11 @@ public class CardView extends Button {
         colorBar.setMaxHeight(12);
         preview.getChildren().add(colorBar);
 
+        Label setSizeLabel = createPropertySetSizeLabel(true);
+        if (setSizeLabel != null) {
+            preview.getChildren().add(setSizeLabel);
+        }
+
         Label nameLabel = new Label(card.getName());
         nameLabel.setFont(Font.font("Arial", FontWeight.BOLD, 18));
         nameLabel.setTextAlignment(TextAlignment.CENTER);
@@ -230,6 +251,26 @@ public class CardView extends Button {
         preview.getChildren().add(valueLabel);
 
         return preview;
+    }
+
+    private Label createPropertySetSizeLabel() {
+        return createPropertySetSizeLabel(false);
+    }
+
+    private Label createPropertySetSizeLabel(boolean preview) {
+        if (!(card instanceof PropertyCard propertyCard)) {
+            return null;
+        }
+        com.mygame.model.Color active = propertyCard.getCurrentActiveColor();
+        PropertyRentRules.RentRule rule = PropertyRentRules.RULES.get(active);
+        if (rule == null) {
+            return null;
+        }
+        int setSize = rule.getMaxSetSize();
+        Label label = new Label("Set: " + setSize);
+        label.setFont(Font.font("Arial", FontWeight.BOLD, preview ? 16 : (small ? 10 : 11)));
+        label.setStyle("-fx-text-fill: rgba(26,26,26,0.78);");
+        return label;
     }
 
     private void hideHoverPreview() {

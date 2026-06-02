@@ -169,7 +169,7 @@
 }
 
 .card-back {
-  -fx-background-color: #ffffff;
+  -fx-background-color: linear-gradient(to bottom right, #ffffff, #dbeafe);
   -fx-border-color: #3b82f6;
   -fx-border-width: 3;
   -fx-background-radius: 12;

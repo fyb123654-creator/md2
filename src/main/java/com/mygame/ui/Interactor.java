@@ -10,6 +10,9 @@ import com.mygame.model.PropertyZone;
 
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.layout.VBox;
 import javafx.scene.control.ScrollPane;
 
@@ -155,8 +158,9 @@ public class Interactor implements GameInteractor {
         dialog.setTitle("Choose property card");
         dialog.setHeaderText("Select one property card from " + targetPlayer.getName());
 
-        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
-        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, cancelButtonType);
 
         VBox content = new VBox(10);
         content.setPrefWidth(520);
@@ -231,8 +235,9 @@ public class Interactor implements GameInteractor {
         dialog.setTitle("Choose property color");
         dialog.setHeaderText("Select a property set of " + player.getName());
 
-        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
-        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, cancelButtonType);
 
         VBox content = new VBox(10);
         content.setPrefWidth(520);
@@ -302,8 +307,9 @@ public class Interactor implements GameInteractor {
         dialog.setTitle("Choose property set");
         dialog.setHeaderText("Select a complete set for " + buildingCard.getName());
 
-        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
-        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, cancelButtonType);
 
         VBox content = new VBox(10);
         content.setPrefWidth(520);
@@ -397,12 +403,16 @@ public class Interactor implements GameInteractor {
 
     @Override
     public boolean confirmUseDoubleTheRent(PlayerManagement currentPlayer, Color selectedColor, int baseRentAmount) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Double The Rent");
-        alert.setHeaderText("Do you want to use Double The Rent?");
-        alert.setContentText(currentPlayer.getName() + "'s rent for " + selectedColor.name() + " is " + baseRentAmount + "M. Double it?");
+        ButtonType yesButton = new ButtonType("Yes", ButtonBar.ButtonData.YES);
+        ButtonType noButton = new ButtonType("No", ButtonBar.ButtonData.NO);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "You have a Double The Rent card.\nDo you want to play it to double the rent to " + (baseRentAmount * 2) + "M?",
+                yesButton, noButton);
+        alert.setTitle("Double The Rent?");
+        alert.setHeaderText("Double Rent");
+
         Optional<ButtonType> result = alert.showAndWait();
-        return result.isPresent() && result.get() == ButtonType.OK;
+        return result.isPresent() && result.get() == yesButton;
     }
 
     @Override
@@ -413,8 +423,9 @@ public class Interactor implements GameInteractor {
         dialog.setTitle("Choose stealable property");
         dialog.setHeaderText("Select a property card that is not part of a complete set");
 
-        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
-        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
+        ButtonType confirmButtonType = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButtonType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, cancelButtonType);
 
         VBox content = new VBox(10);
         content.setPrefWidth(520);

@@ -20,6 +20,7 @@ public class PlayerManagement {
     private final String playerId;
     private final String playerName;
     private int avatarId;
+    private boolean eliminated;
 
     private final List<Card> handCards;
     private final List<Card> bankCards;
@@ -38,6 +39,7 @@ public class PlayerManagement {
         this.playerId = playerId;
         this.playerName = playerName;
         this.avatarId = 0;
+        this.eliminated = false;
         this.handCards = new ArrayList<>();
         this.bankCards = new ArrayList<>();
         this.propertyZones = new EnumMap<>(Color.class);
@@ -57,6 +59,14 @@ public class PlayerManagement {
 
     public void setAvatarId(int avatarId) {
         this.avatarId = Math.max(0, avatarId);
+    }
+
+    public boolean isEliminated() {
+        return eliminated;
+    }
+
+    public void setEliminated(boolean eliminated) {
+        this.eliminated = eliminated;
     }
 
     // Compatibility alias for UI code
@@ -112,6 +122,16 @@ public class PlayerManagement {
             // Clean empty zones to avoid UI artifacts
             if (zone.getPropertiesView().isEmpty() && zone.getHouse() == null && zone.getHotel() == null) {
                 emptyZoneKeyToRemove = entry.getKey();
+            } else if (!isSetComplete(entry.getKey())) {
+                // If set becomes incomplete, buildings must be moved to hand
+                if (zone.getHotel() != null) {
+                    handCards.add(zone.getHotel());
+                    zone.removeCard(zone.getHotel());
+                }
+                if (zone.getHouse() != null) {
+                    handCards.add(zone.getHouse());
+                    zone.removeCard(zone.getHouse());
+                }
             }
             break;
         }
@@ -226,6 +246,12 @@ public class PlayerManagement {
 
         String lowerName = buildingCard.getName() == null ? "" : buildingCard.getName().toLowerCase();
         if (lowerName.contains("hotel")) {
+            if (color == Color.RAILROAD || color == Color.UTILITY) {
+                throw new IllegalStateException("hotel cannot be placed on railroad or utility set: " + color);
+            }
+            if (zone.house == null) {
+                throw new IllegalStateException("hotel can only be placed on a set that already has a house: " + color);
+            }
             if (zone.hotel != null) {
                 throw new IllegalStateException("hotel already exists in set: " + color);
             }
@@ -310,7 +336,35 @@ public class PlayerManagement {
     }
 
     public boolean hasWon() {
-        return getCompleteSetCount() >= REQUIRED_COMPLETE_SETS_TO_WIN;
+        return !eliminated && getCompleteSetCount() >= REQUIRED_COMPLETE_SETS_TO_WIN;
+    }
+
+    public List<Card> removeAllCards() {
+        List<Card> all = new ArrayList<>();
+
+        all.addAll(handCards);
+        handCards.clear();
+
+        all.addAll(bankCards);
+        bankCards.clear();
+
+        for (PropertyZone zone : propertyZones.values()) {
+            all.addAll(zone.properties);
+            zone.properties.clear();
+            if (zone.house != null) {
+                all.add(zone.house);
+                zone.house = null;
+                zone.hasHouse = false;
+            }
+            if (zone.hotel != null) {
+                all.add(zone.hotel);
+                zone.hotel = null;
+                zone.hasHotel = false;
+            }
+        }
+        propertyZones.clear();
+
+        return all;
     }
 
     public boolean needsToDiscard() {

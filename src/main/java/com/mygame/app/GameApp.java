@@ -29,10 +29,10 @@ public class GameApp extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         this.primaryStage = primaryStage;
-        showModeSelection();
+        showMainMenu();
     }
 
-    private void showModeSelection() {
+    public void showMainMenu() {
         VBox root = new VBox(16);
         root.getStyleClass().add("menu-root");
         root.setStyle("-fx-padding: 48; -fx-alignment: center;");
@@ -115,6 +115,8 @@ public class GameApp extends Application {
             LoadedView<GameController> view = ViewLoader.load("/GameView.fxml");
             Parent root = view.getRoot();
             GameController controller = view.getController();
+            controller.setGameApp(this);
+            primaryStage.setOnCloseRequest(e -> controller.cleanup());
 
             Scene scene = new Scene(root, 1280, 720);
             applyTheme(scene);
@@ -148,6 +150,10 @@ public class GameApp extends Application {
     }
 
     private void startOnlineMultiplayer() {
+        showOnlineLobby();
+    }
+
+    public void showOnlineLobby() {
         try {
             LoadedView<NetworkGameController> view = ViewLoader.load("/NetworkGameView.fxml");
             Parent root = view.getRoot();
@@ -172,6 +178,8 @@ public class GameApp extends Application {
             LoadedView<GameController> view = ViewLoader.load("/GameView.fxml");
             Parent root = view.getRoot();
             GameController controller = view.getController();
+            controller.setGameApp(this);
+            primaryStage.setOnCloseRequest(e -> controller.cleanup());
             // Configure online mode first, then initialize the game.
             controller.setOnlineMode(true, playerIndex);
             controller.setGameServer(gameServer);

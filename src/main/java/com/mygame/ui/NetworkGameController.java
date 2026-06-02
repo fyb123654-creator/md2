@@ -37,6 +37,7 @@ public class NetworkGameController {
     @FXML private Button playerCount5Button;
     @FXML private Button hostButton;
     @FXML private Button joinButton;
+    @FXML private Button backToMenuButton;
     @FXML private Button readyButton;
     @FXML private Button startButton;
     @FXML private Label hintLabel;
@@ -84,6 +85,79 @@ public class NetworkGameController {
             hintLabel.setText("Click Create Game to choose the room size, or Join Game to enter an existing room.");
         }
 
+    }
+
+    @FXML
+    private void onBackToMenuClicked() {
+        if (gameServer != null) {
+            cleanup();
+            gameServer = null;
+            isHost = false;
+            resetToChoosePlayerCountState();
+            return;
+        }
+        if (gameClient != null) {
+            cleanup();
+            gameClient = null;
+            isHost = false;
+            resetToInitialState();
+            return;
+        }
+        if (choosingHostPlayerCount) {
+            resetToInitialState();
+            return;
+        }
+        if (gameApp != null) {
+            gameApp.showMainMenu();
+        }
+    }
+
+    private void resetToInitialState() {
+        choosingHostPlayerCount = false;
+        lobbyPlayers.clear();
+        refreshLobbyPlayerList();
+        setPlayerCountButtonsVisible(false);
+        setPlayerCountButtonsDisabled(false);
+        setConnectionControlsDisabled(false);
+        if (hostButton != null) {
+            hostButton.setText("Create Game");
+        }
+        if (readyButton != null) {
+            readyButton.setDisable(true);
+            readyButton.setText("Ready");
+        }
+        stopReadyAttention();
+        if (startButton != null) startButton.setDisable(true);
+        if (hintLabel != null) {
+            hintLabel.setText("Click Create Game to choose the room size, or Join Game to enter an existing room.");
+        }
+        if (statusLabel != null) {
+            statusLabel.setText("Ready to connect...");
+        }
+    }
+
+    private void resetToChoosePlayerCountState() {
+        choosingHostPlayerCount = true;
+        lobbyPlayers.clear();
+        refreshLobbyPlayerList();
+        setPlayerCountButtonsVisible(true);
+        setPlayerCountButtonsDisabled(false);
+        setConnectionControlsDisabled(false);
+        if (hostButton != null) {
+            hostButton.setText("Confirm Create Game");
+        }
+        if (readyButton != null) {
+            readyButton.setDisable(true);
+            readyButton.setText("Ready");
+        }
+        stopReadyAttention();
+        if (startButton != null) startButton.setDisable(true);
+        if (hintLabel != null) {
+            hintLabel.setText("Choose 2, 3, 4, or 5 players, then click Confirm Create Game.");
+        }
+        if (statusLabel != null) {
+            statusLabel.setText("Choose the player count for this room.");
+        }
     }
 
     @FXML
@@ -248,9 +322,9 @@ public class NetworkGameController {
             refreshLobbyPlayerList();
             localReady = false;
             if (readyButton != null) {
-                readyButton.setDisable(false);
+                readyButton.setDisable(true);
                 readyButton.setText("Ready");
-                startReadyAttention();
+                stopReadyAttention();
             }
             if (startButton != null) {
                 startButton.setDisable(true);
@@ -268,6 +342,10 @@ public class NetworkGameController {
                         if (hintLabel != null) {
                             hintLabel.setText("Click Ready. The host will Start when everyone is Ready.");
                         }
+                        if (readyButton != null) {
+                            readyButton.setDisable(false);
+                            startReadyAttention();
+                        }
                     });
                 }
 
@@ -278,6 +356,11 @@ public class NetworkGameController {
                         statusLabel.setText("Disconnected");
                         setConnectionControlsDisabled(false);
                         setPlayerCountButtonsDisabled(false);
+                        if (readyButton != null) {
+                            readyButton.setDisable(true);
+                            readyButton.setText("Ready");
+                        }
+                        stopReadyAttention();
                     });
                 }
 
@@ -391,6 +474,10 @@ public class NetworkGameController {
 
     @FXML
     private void onReadyClicked() {
+        if (!isHost && (gameClient == null || !gameClient.isConnected())) {
+            showError("Not connected to server.");
+            return;
+        }
         localReady = !localReady;
         if (readyButton != null) {
             readyButton.setText(localReady ? "Ready ✓" : "Ready");
@@ -583,7 +670,16 @@ public class NetworkGameController {
 
     public void cleanup() {
         if (gameServer != null) {
-            gameServer.stop();
+            if (isHost) {
+                var gm = gameServer.getGameManager();
+                if (gm != null && gm.isGameStarted() && !gm.isGameOver()) {
+                    gameServer.handleHostLeaving();
+                } else {
+                    gameServer.stop();
+                }
+            } else {
+                gameServer.stop();
+            }
         }
         if (gameClient != null) {
             gameClient.close();

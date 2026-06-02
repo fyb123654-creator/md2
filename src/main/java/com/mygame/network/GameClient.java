@@ -105,7 +105,7 @@ public class GameClient {
                 if (listener != null) {
                     listener.onConnectFailed("Connection failed: " + e.getMessage());
                 }
-                e.printStackTrace();
+                close();
             }
         });
     }
@@ -232,9 +232,14 @@ public class GameClient {
         
         try {
             out.writeObject(message);
+            out.reset(); // Prevent ObjectOutputStream memory leak
             out.flush();
         } catch (IOException e) {
-            e.printStackTrace();
+            connected = false;
+            if (listener != null) {
+                listener.onError("Disconnected from server");
+            }
+            close();
         }
     }
 

@@ -29,7 +29,8 @@ public class GameServer {
     private static final Logger LOGGER = Logger.getLogger(GameServer.class.getName());
     private ServerSocket serverSocket;
     private ExecutorService executorService;
-    private List<ClientHandler> clients;
+    private final Map<Integer, ClientHandler> clientsByIndex;
+    private final Object clientsLock = new Object();
     private GameManager gameManager;
     private int port;
     private boolean running;
@@ -107,7 +108,7 @@ public class GameServer {
     public GameServer(int port, int playerCount, String hostName, int hostAvatarId) {
         this.port = port;
         this.expectedPlayerCount = playerCount;
-        this.clients = new ArrayList<>();
+        this.clientsByIndex = new HashMap<>();
         this.executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         this.gameManager = new GameManager();
         this.readyFlags = new boolean[playerCount];
@@ -130,15 +131,35 @@ public class GameServer {
             while (running) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    if (clients.size() >= expectedPlayerCount - 1) {
+                    if (gameManager != null && gameManager.isGameStarted()) {
+                        ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
+                        out.writeObject(NetworkProtocol.connectAck(false, "Game already started"));
+                        out.flush();
+                        clientSocket.close();
+                        continue;
+                    }
+                    int assignedIndex = -1;
+                    synchronized (clientsLock) {
+                        if (clientsByIndex.size() < expectedPlayerCount - 1) {
+                            for (int i = 1; i < expectedPlayerCount; i++) {
+                                if (!clientsByIndex.containsKey(i)) {
+                                    assignedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (assignedIndex < 0) {
                         ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
                         out.writeObject(NetworkProtocol.connectAck(false, "Game is full"));
                         out.flush();
                         clientSocket.close();
                         continue;
                     }
-                    ClientHandler handler = new ClientHandler(clientSocket, clients.size() + 1);
-                    clients.add(handler);
+                    ClientHandler handler = new ClientHandler(clientSocket, assignedIndex);
+                    synchronized (clientsLock) {
+                        clientsByIndex.put(assignedIndex, handler);
+                    }
                     executorService.submit(handler);
                     broadcastRoomUpdate();
                 } catch (IOException e) {
@@ -183,7 +204,7 @@ public class GameServer {
 
     public boolean canStartGame() {
         // All clients connected
-        if (clients.size() != expectedPlayerCount - 1) {
+        if (getConnectedClientCount() != expectedPlayerCount - 1) {
             return false;
         }
         // All players ready
@@ -228,21 +249,141 @@ public class GameServer {
         }
     }
 
+    public void handleHostLeaving() {
+        if (gameManager == null) {
+            stop();
+            return;
+        }
+        if (gameManager.isGameOver()) {
+            stop();
+            return;
+        }
+        if (gameManager.isGameStarted()) {
+            if (!gameManager.getPlayersView().isEmpty()) {
+                PlayerManagement host = gameManager.getPlayersView().get(0);
+                if (!host.isEliminated()) {
+                    List<Card> returned = host.removeAllCards();
+                    CardManager cm = gameManager.getCardManager();
+                    if (cm != null) {
+                        for (Card c : returned) {
+                            cm.addToTopOfDrawPile(c);
+                        }
+                    }
+                    gameManager.eliminatePlayer(0);
+                    clearSinglePaymentState();
+                    clearBatchState();
+                    clearActionJustSayNoState();
+                }
+            }
+            broadcastGameState();
+            if (!gameManager.isGameOver()) {
+                broadcast(NetworkProtocol.error("Host left the game."));
+                stop();
+            }
+            return;
+        }
+
+        broadcast(NetworkProtocol.error("Host left the game."));
+        stop();
+    }
+
     public GameStateData getLastBroadcastState() {
         return lastBroadcastState;
     }
 
     public void broadcast(NetworkProtocol message) {
-        for (ClientHandler client : clients) client.send(message);
+        for (ClientHandler client : getClientSnapshot()) {
+            client.send(message);
+        }
     }
 
     public void stop() {
         running = false;
         try {
             if (serverSocket != null) serverSocket.close();
-            for (ClientHandler client : clients) client.close();
+            for (ClientHandler client : getClientSnapshot()) {
+                client.close();
+            }
             executorService.shutdown();
         } catch (IOException e) { LOGGER.log(Level.WARNING, "Error closing server resources", e); }
+    }
+
+    private int getConnectedClientCount() {
+        synchronized (clientsLock) {
+            return clientsByIndex.size();
+        }
+    }
+
+    private List<ClientHandler> getClientSnapshot() {
+        synchronized (clientsLock) {
+            return new ArrayList<>(clientsByIndex.values());
+        }
+    }
+
+    private void unregisterClient(int index) {
+        if (index <= 0) {
+            return;
+        }
+        boolean removed;
+        synchronized (clientsLock) {
+            removed = clientsByIndex.remove(index) != null;
+        }
+        if (removed && gameManager != null && gameManager.isGameStarted() && !gameManager.isGameOver()) {
+            if (index < gameManager.getPlayersView().size()) {
+                PlayerManagement leaver = gameManager.getPlayersView().get(index);
+                if (!leaver.isEliminated()) {
+                    boolean continueBatch = false;
+                    
+                    if (isWaitingForJsnAction && pendingJsnResponder != null && leaver.getPlayerId().equals(pendingJsnResponder.getPlayerId())) {
+                        Runnable callback = pendingJsnActionCanceled ? pendingJsnCancelCallback : pendingJsnSuccessCallback;
+                        clearActionJustSayNoState();
+                        if (callback != null) callback.run();
+                    } else {
+                        clearActionJustSayNoState();
+                    }
+                    
+                    if ((isWaitingForPayment || isWaitingForJsn) && pendingVictimId != null && leaver.getPlayerId().equals(pendingVictimId)) {
+                        PlayerManagement collector = findPlayerById(pendingCollectorId);
+                        if (collector != null && !collector.isEliminated()) {
+                            leaver.transferAllAssetsTo(collector);
+                        }
+                        clearSinglePaymentState();
+                        continueBatch = true;
+                    } else {
+                        clearSinglePaymentState();
+                        clearBatchState();
+                    }
+
+                    List<Card> returned = leaver.removeAllCards();
+                    CardManager cm = gameManager.getCardManager();
+                    if (cm != null) {
+                        for (Card c : returned) {
+                            cm.addToTopOfDrawPile(c);
+                        }
+                    }
+                    gameManager.eliminatePlayer(index);
+                    
+                    if (continueBatch && pendingPaymentQueue != null) {
+                        currentPaymentIndex++;
+                        processNextPaymentInBatch();
+                    } else {
+                        broadcastGameState();
+                    }
+                }
+            }
+        }
+        if (removed && index < readyFlags.length) {
+            readyFlags[index] = false;
+        }
+        if (removed && index < playerNames.length) {
+            playerNames[index] = null;
+        }
+        if (removed && index < playerAvatarIds.length) {
+            playerAvatarIds[index] = 0;
+        }
+        if (removed) {
+            broadcastRoomUpdate();
+        }
     }
 
     public GameManager getGameManager() { return gameManager; }
@@ -322,7 +463,7 @@ public class GameServer {
             });
             return;
         }
-        for (ClientHandler client : clients) {
+        for (ClientHandler client : getClientSnapshot()) {
             PlayerManagement p = gameManager.getPlayersView().get(client.getPlayerIndex());
             if (p.getPlayerId().equals(targetPlayerId)) {
                 client.send(msg);
@@ -511,6 +652,10 @@ public class GameServer {
             }
 
             String[] parts = content.split(":");
+            if (parts.length < 1) {
+                send(NetworkProtocol.error("Invalid response format"));
+                return;
+            }
             String answer = parts[0];
             String cardId = parts.length > 1 ? parts[1] : null;
             if ("YES".equals(answer) && cardId != null) {
@@ -740,7 +885,15 @@ public class GameServer {
 
         private void handlePaymentJustSayNo(String action, PlayerManagement currentPlayer) {
             String[] parts = action.split(":");
+            if (parts.length < 2) {
+                send(NetworkProtocol.error("Invalid response format"));
+                return;
+            }
             if ("YES".equals(parts[1])) {
+                if (parts.length < 3) {
+                    send(NetworkProtocol.error("Missing card ID for Just Say No"));
+                    return;
+                }
                 Card jsnCard = findCardInHand(currentPlayer, parts[2]);
                 if (jsnCard != null) {
                     currentPlayer.removeFromHand(jsnCard);
@@ -1027,15 +1180,22 @@ public class GameServer {
                 return;
             }
 
-            if (buildingActionCard instanceof HouseCard) {
+            if (buildingActionCard instanceof HouseCard || buildingActionCard instanceof HotelCard) {
                 if (selectedColor == Color.RAILROAD || selectedColor == Color.UTILITY) {
-                    send(NetworkProtocol.error("House cannot be placed on railroad or utility sets"));
+                    send(NetworkProtocol.error("Building cannot be placed on railroad or utility sets"));
                     return;
                 }
             }
             if (!currentPlayer.isSetComplete(selectedColor)) {
                 send(NetworkProtocol.error("Building can only be placed on a complete set"));
                 return;
+            }
+            if (buildingActionCard instanceof HotelCard) {
+                PropertyZone zone = currentPlayer.getPropertyZonesView().get(selectedColor);
+                if (zone == null || zone.getHouse() == null) {
+                    send(NetworkProtocol.error("Hotel can only be placed on a set that already has a house"));
+                    return;
+                }
             }
 
             int addedRent = (buildingActionCard instanceof HotelCard) ? GameManager.HOTEL_ADDED_RENT : GameManager.HOUSE_ADDED_RENT;
@@ -1079,6 +1239,12 @@ public class GameServer {
             Card myCard = findPropertyCardById(currentPlayer, myCardId);
             Card cardToSteal = findPropertyCardById(targetPlayer, targetCardId);
             if (targetPlayer != null && myCard != null && cardToSteal != null) {
+                Color targetColor = findColorOfProperty(targetPlayer, cardToSteal);
+                if (targetColor != null && targetPlayer.isSetComplete(targetColor)) {
+                    send(NetworkProtocol.error("Cannot steal a property from a complete set"));
+                    return;
+                }
+                
                 // Once played, an action card goes to discard pile and counts as played this turn
                 gameManager.removeFromCurrentPlayerHand(actionCard);
                 gameManager.getCardManager().playCard(actionCard);
@@ -1086,10 +1252,11 @@ public class GameServer {
 
                 Runnable success = () -> {
                     Color myColor = findColorOfProperty(currentPlayer, myCard);
-                    Color targetColor = findColorOfProperty(targetPlayer, cardToSteal);
-                    if (myColor != null && targetColor != null) {
+                    // re-check color just in case
+                    Color tColor = findColorOfProperty(targetPlayer, cardToSteal);
+                    if (myColor != null && tColor != null) {
                         if (currentPlayer.removeFromPropertyZones(myCard) && targetPlayer.removeFromPropertyZones(cardToSteal)) {
-                            currentPlayer.addProperty(targetColor, (PropertyCard) cardToSteal);
+                            currentPlayer.addProperty(tColor, (PropertyCard) cardToSteal);
                             targetPlayer.addProperty(myColor, (PropertyCard) myCard);
                             broadcastGameState();
                         }
@@ -1135,6 +1302,7 @@ public class GameServer {
             try {
                 if (out != null) {
                     out.writeObject(message);
+                    out.reset(); // Prevent ObjectOutputStream memory leak
                     out.flush();
                 }
             } catch (IOException e) { LOGGER.log(Level.WARNING, "Failed to send message to player " + playerIndex, e); }
@@ -1147,6 +1315,7 @@ public class GameServer {
                 if (out != null) out.close();
                 if (socket != null) socket.close();
             } catch (IOException e) { LOGGER.log(Level.FINE, "Error closing client socket", e); }
+            unregisterClient(playerIndex);
         }
 
         public int getPlayerIndex() { return playerIndex; }

@@ -108,6 +108,10 @@ public class GameManager {
         return Collections.unmodifiableList(players);
     }
 
+    public boolean isGameStarted() {
+        return gameStarted;
+    }
+
     public CardManager getCardManager() {
         return cardManager;
     }
@@ -583,13 +587,76 @@ public class GameManager {
     private void beginCurrentPlayerTurn() {
         playedCardsThisTurn = 0;
         currentPlayerEndedTurn = false;
+        ensureCurrentPlayerIsActiveOrEndGame();
+        if (winner != null) {
+            return;
+        }
         PlayerManagement currentPlayer = players.get(currentPlayerIndex);
-        List<Card> cards = cardManager.drawCards(TURN_DRAW_CARD_COUNT);
+        
+        int drawCount = TURN_DRAW_CARD_COUNT;
+        if (currentPlayer.getHandCardCount() == 0) {
+            drawCount = 5;
+        }
+        
+        List<Card> cards = cardManager.drawCards(drawCount);
         for (Card card : cards) {
             currentPlayer.addToHand(card);
         }
         fireEvent(GameEventType.TURN_STARTED, "Turn: " + currentPlayer.getName() + " (+" + cards.size() + " card" + (cards.size() == 1 ? "" : "s") + ")");
         checkDeckExhaustionEndGameIfStuck();
+    }
+
+    private void ensureCurrentPlayerIsActiveOrEndGame() {
+        if (winner != null || players.isEmpty()) {
+            return;
+        }
+        int activeCount = 0;
+        int lastActiveIndex = -1;
+        for (int i = 0; i < players.size(); i++) {
+            if (!players.get(i).isEliminated()) {
+                activeCount++;
+                lastActiveIndex = i;
+            }
+        }
+        if (activeCount == 1 && lastActiveIndex >= 0) {
+            winner = players.get(lastActiveIndex);
+            currentPlayerEndedTurn = true;
+            fireEvent(GameEventType.WINNER_DETERMINED, "Winner: " + winner.getName());
+            return;
+        }
+        if (activeCount <= 0) {
+            return;
+        }
+        if (currentPlayerIndex < 0) {
+            currentPlayerIndex = 0;
+        }
+        if (currentPlayerIndex >= players.size()) {
+            currentPlayerIndex = currentPlayerIndex % players.size();
+        }
+        if (!players.get(currentPlayerIndex).isEliminated()) {
+            return;
+        }
+        int idx = currentPlayerIndex - 1;
+        for (int step = 0; step < players.size(); step++) {
+            idx = (idx + 1) % players.size();
+            if (!players.get(idx).isEliminated()) {
+                currentPlayerIndex = idx;
+                return;
+            }
+        }
+    }
+
+    public void eliminatePlayer(int playerIndex) {
+        ensureGameStarted();
+        if (playerIndex < 0 || playerIndex >= players.size()) {
+            return;
+        }
+        PlayerManagement player = players.get(playerIndex);
+        if (player.isEliminated()) {
+            return;
+        }
+        player.setEliminated(true);
+        ensureCurrentPlayerIsActiveOrEndGame();
     }
 
     private void checkDeckExhaustionEndGameIfStuck() {
@@ -600,6 +667,9 @@ public class GameManager {
             return;
         }
         for (PlayerManagement player : players) {
+            if (player.isEliminated()) {
+                continue;
+            }
             if (player.getHandCardCount() > 0) {
                 return;
             }
@@ -617,6 +687,9 @@ public class GameManager {
         int bestHandCount = -1;
 
         for (PlayerManagement player : players) {
+            if (player.isEliminated()) {
+                continue;
+            }
             int completeSets = player.getCompleteSetCount();
             int propertyCount = 0;
             for (PropertyZone zone : player.getPropertyZonesView().values()) {

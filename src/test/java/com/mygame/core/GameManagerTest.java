@@ -43,6 +43,18 @@ public class GameManagerTest {
         return new CardManager(deck);
     }
 
+    private static CardManager moneyDeck(int count) {
+        List<Card> drawnOrder = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            drawnOrder.add(new MoneyCard("d" + i, "1M", 1));
+        }
+        List<Card> deck = new ArrayList<>();
+        for (int i = drawnOrder.size() - 1; i >= 0; i--) {
+            deck.add(drawnOrder.get(i));
+        }
+        return new CardManager(deck);
+    }
+
     @Test
     void startRound_dealsInitialHandsAndDrawsForFirstPlayer() {
         GameManager gameManager = new GameManager();
@@ -112,6 +124,23 @@ public class GameManagerTest {
     }
 
     @Test
+    void beginTurn_alwaysDrawsTwoCardsEvenWhenHandIsSeven() {
+        GameManager gameManager = new GameManager();
+        gameManager.setPlayerCount(2);
+        gameManager.startRound(moneyDeck(40));
+
+        assertEquals(7, gameManager.getCurrentPlayer().getHandCardCount());
+
+        gameManager.confirmCurrentPlayerTurnEnded();
+        gameManager.advanceTurn();
+        assertEquals(7, gameManager.getCurrentPlayer().getHandCardCount());
+
+        gameManager.confirmCurrentPlayerTurnEnded();
+        gameManager.advanceTurn();
+        assertEquals(9, gameManager.getCurrentPlayer().getHandCardCount());
+    }
+
+    @Test
     void stealPropertyCard_canTriggerWinner() {
         GameManager gameManager = new GameManager();
         gameManager.setPlayerCount(2);
@@ -138,5 +167,17 @@ public class GameManagerTest {
         assertEquals(0, target.getPropertyCount(Color.UTILITY));
         assertTrue(me.isSetComplete(Color.UTILITY));
         assertEquals(me.getName(), gameManager.getWinner().getName());
+    }
+
+    @Test
+    void eliminatePlayer_whenOnlyOneActiveLeft_setsWinnerToRemainingPlayer() {
+        GameManager gameManager = new GameManager();
+        gameManager.setPlayerCount(2);
+        gameManager.startRound(moneyDeck(40));
+
+        assertFalse(gameManager.hasWinner());
+        gameManager.eliminatePlayer(0);
+        assertTrue(gameManager.hasWinner());
+        assertEquals(gameManager.getPlayersView().get(1).getName(), gameManager.getWinner().getName());
     }
 }
