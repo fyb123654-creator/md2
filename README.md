@@ -6,7 +6,7 @@
 
 A digital implementation of the Monopoly Deal card game built with Java and JavaFX. Supports local multiplayer (2–5 players) and online multiplayer via TCP socket networking. Players collect property sets, charge rent, and use action cards — first to 3 complete sets wins.
 
-GitHub: https://github.com/GroupNine111111/md2
+GitHub: https://github.com/fyb123654-creator/md2
 
 ## Tech Stack
 
