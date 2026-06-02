@@ -655,75 +655,9 @@ public class GameServer {
         private void processPlayerAction(String action) {
             PlayerManagement currentPlayer = gameManager.getPlayersView().get(playerIndex);
 
-            // 1) Handle Just Say No waiting
-            if (isWaitingForJsnAction) {
-                if (pendingJsnResponder == null || !currentPlayer.getPlayerId().equals(pendingJsnResponder.getPlayerId())) {
-                    send(NetworkProtocol.error("Waiting for another player's response"));
-                    return;
-                }
-                if (action.startsWith("JUST_SAY_NO_RESPONSE:")) {
-                    handleJustSayNoResponse(action.substring(21), currentPlayer);
-                } else {
-                    send(NetworkProtocol.error("Invalid response format"));
-                }
-                return;
-            }
+            if (waitingForJsnAction(action, currentPlayer)) return;
+            if (waitingForPaymentResponse(action, currentPlayer)) return;
 
-            // 2) Handle payment waiting (includes JSN and payment)
-            if (isWaitingForJsn || isWaitingForPayment) {
-                String expectedResponderId = isWaitingForJsn ? pendingPaymentJsnResponderId : pendingVictimId;
-                if (!currentPlayer.getPlayerId().equals(expectedResponderId)) {
-                    send(NetworkProtocol.error("Waiting for another player's response"));
-                    return;
-                }
-                if (isWaitingForJsn && action.startsWith("JUST_SAY_NO_RESPONSE:")) {
-                    String[] parts = action.split(":");
-                    if ("YES".equals(parts[1])) {
-                        Card jsnCard = findCardInHand(currentPlayer, parts[2]);
-                        if (jsnCard != null) {
-                            currentPlayer.removeFromHand(jsnCard);
-                            gameManager.getCardManager().playCard(jsnCard);
-
-                            pendingPaymentCanceledByJsn = currentPlayer.getPlayerId().equals(pendingVictimId);
-                            PlayerManagement nextResponder = pendingPaymentCanceledByJsn
-                                    ? findPlayerById(pendingCollectorId)
-                                    : findPlayerById(pendingVictimId);
-                            if (nextResponder != null && findJustSayNoCard(nextResponder) != null) {
-                                pendingPaymentJsnResponderId = nextResponder.getPlayerId();
-                                NetworkProtocol req = new NetworkProtocol();
-                                req.setType(NetworkProtocol.MessageType.ASK_JUST_SAY_NO);
-                                req.setContent(currentPlayer.getName() + ":Just Say No");
-                                sendToPlayer(nextResponder.getPlayerId(), req);
-                                broadcastGameState();
-                                return;
-                            }
-                        }
-
-                        if (pendingPaymentCanceledByJsn) {
-                            clearSinglePaymentState();
-                            continueBatchOrBroadcast();
-                        } else {
-                            resolvePaymentAfterJustSayNoDeclined();
-                        }
-                    } else {
-                        if (pendingPaymentCanceledByJsn) {
-                            clearSinglePaymentState();
-                            continueBatchOrBroadcast();
-                        } else {
-                            resolvePaymentAfterJustSayNoDeclined();
-                        }
-                    }
-                    return;
-                } else if (isWaitingForPayment && action.startsWith("PAYMENT_RESPONSE:")) {
-                    handlePaymentResponse(action.substring(17), currentPlayer);
-                    return;
-                } else {
-                    send(NetworkProtocol.error("You must respond to the payment request"));
-                    return;
-                }
-            }
-
-            // 3) Normal turn operations
             if (gameManager.getCurrentPlayerIndex() != playerIndex) {
                 send(NetworkProtocol.error("It's not your turn!"));
                 return;
@@ -731,19 +665,7 @@ public class GameServer {
 
             try {
                 if ("END_TURN".equals(action)) {
-                    gameManager.confirmCurrentPlayerTurnEnded();
-                    if (gameManager.canAdvanceTurn()) {
-                        gameManager.advanceTurn();
-                        broadcastGameState();
-                        return;
-                    }
-                    int handCount = currentPlayer.getHandCardCount();
-                    if (handCount > PlayerManagement.MAX_HAND_SIZE) {
-                        send(NetworkProtocol.error("Hand limit exceeded. Discard until you have 7 or fewer cards."));
-                    } else {
-                        send(NetworkProtocol.error("Cannot end turn right now."));
-                    }
-                    broadcastGameState();
+                    handleEndTurn(currentPlayer);
                     return;
                 }
 
@@ -757,159 +679,275 @@ public class GameServer {
                 String cardId = parts[1];
 
                 if ("SWITCH_PROPERTY_COLOR".equals(actionType)) {
-                    if (parts.length < 3) {
-                        send(NetworkProtocol.error("Invalid property color switch format"));
-                        return;
-                    }
-                    Card propertyCard = findPropertyCardById(currentPlayer, cardId);
-                    if (!(propertyCard instanceof PropertyCard pc)) {
-                        send(NetworkProtocol.error("Property card not found"));
-                        return;
-                    }
-                    if (!(propertyCard instanceof BiColorWildPropertyCard || propertyCard instanceof MultiColorWildPropertyCard)) {
-                        send(NetworkProtocol.error("Only wild property cards can switch color"));
-                        return;
-                    }
-                    Color targetColor = Color.valueOf(parts[2]);
-                    if (currentPlayer.movePropertyCardToColor(pc, targetColor)) {
-                        broadcastGameState();
-                    } else {
-                        send(NetworkProtocol.error("Failed to switch property color"));
-                    }
+                    handleSwitchPropertyColor(parts, currentPlayer, cardId);
                     return;
                 }
 
-                // Except DISCARD/END_TURN, playing cards is limited to 3 per turn
-                if (!"DISCARD".equals(actionType) && !"END_TURN".equals(actionType) && !gameManager.canCurrentPlayerPlayCard()) {
+                if (!"DISCARD".equals(actionType) && !gameManager.canCurrentPlayerPlayCard()) {
                     send(NetworkProtocol.error("You have already played the maximum number of cards this turn"));
                     return;
                 }
 
-                Card targetCard = null;
-                for (Card c : currentPlayer.getHandCardsView()) {
-                    if (c.getId().equals(cardId)) { targetCard = c; break; }
-                }
+                Card targetCard = findCardInHand(currentPlayer, cardId);
                 if (targetCard == null) {
                     send(NetworkProtocol.error("Card not found"));
                     return;
                 }
 
-                switch (actionType) {
-                    case "DEPOSIT":
-                        gameManager.depositMoneyCard(targetCard);
-                        broadcastGameState();
-                        break;
-                    case "DISCARD":
-                        gameManager.removeFromCurrentPlayerHand(targetCard);
-                        gameManager.getCardManager().playCard(targetCard);
-                        if (currentPlayer.getHandCardCount() <= PlayerManagement.MAX_HAND_SIZE) {
-                            gameManager.confirmCurrentPlayerTurnEnded();
-                            if (gameManager.canAdvanceTurn()) gameManager.advanceTurn();
-                        }
-                        broadcastGameState();
-                        break;
-                    case "PLACE_PROPERTY":
-                    {
-                        if (!(targetCard instanceof PropertyCard)) return;
-                        PropertyCard pc = (PropertyCard) targetCard;
-                        if (pc.getPlayableColors().isEmpty()) return;
-                        Color placeSelectedColor;
-                        if (parts.length >= 3) {
-                            placeSelectedColor = Color.valueOf(parts[2]);
-                        } else {
-                            placeSelectedColor = pc.getPlayableColors().iterator().next();
-                        }
-                        if (!pc.getPlayableColors().contains(placeSelectedColor)) {
-                            send(NetworkProtocol.error("This property card cannot be used for " + placeSelectedColor.getDisplayName()));
-                            return;
-                        }
-                        gameManager.placePropertyCard(pc, currentPlayer, placeSelectedColor);
-                        broadcastGameState();
-                        break;
-                    }
-                    case "PLAY_ACTION":
-                    {
-                        if (!(targetCard instanceof ActionCard)) {
-                            send(NetworkProtocol.error("Not an action card"));
-                            return;
-                        }
-
-                        // Rent card: client already selected color/target/double flag
-                        if (parts.length >= 4 && ("BI_RENT".equals(parts[2]) || "WILD_RENT".equals(parts[2]))) {
-                            String rentMode = parts[2]; // BI_RENT / WILD_RENT
-                            Color rentSelectedColor = Color.valueOf(parts[3]);
-
-                            String targetPlayerId = null;
-                            String doubleCardId = "NONE";
-                            if ("WILD_RENT".equals(rentMode)) {
-                                if (parts.length < 6) {
-                                    send(NetworkProtocol.error("Invalid WILD_RENT format"));
-                                    return;
-                                }
-                                targetPlayerId = parts[4];
-                                doubleCardId = parts[5];
-                            } else { // BI_RENT
-                                if (parts.length < 5) {
-                                    send(NetworkProtocol.error("Invalid BI_RENT format"));
-                                    return;
-                                }
-                                doubleCardId = parts[4];
-                            }
-
-                            executeRentDirectly(currentPlayer, targetCard, rentMode, rentSelectedColor, targetPlayerId, doubleCardId);
-                            return;
-                        }
-
-                        // House/Hotel: client already selected target color set
-                        if (parts.length >= 4 && "BUILDING".equals(parts[2])) {
-                            Color buildingSelectedColor = Color.valueOf(parts[3]);
-                            executeBuildingDirectly(currentPlayer, targetCard, buildingSelectedColor);
-                            broadcastGameState();
-                            return;
-                        }
-
-                        if (targetCard instanceof SlyDealCard && parts.length == 4) {
-                            executeSlyDealDirectly(currentPlayer, targetCard, parts[2], parts[3]);
-                        } else if (targetCard instanceof ForcedDealCard && parts.length == 5) {
-                            executeForcedDealDirectly(currentPlayer, targetCard, parts[2], parts[3], parts[4]);
-                        } else if (targetCard instanceof DealBreakerCard && parts.length == 4) {
-                            executeDealBreakerDirectly(currentPlayer, targetCard, parts[2], parts[3]);
-                        } else if (targetCard instanceof DebtCollectorCard && parts.length == 3) {
-                            PlayerManagement victim = findPlayerById(parts[2]);
-                            if (victim != null) {
-                                gameManager.removeFromCurrentPlayerHand(targetCard);
-                                gameManager.getCardManager().playCard(targetCard);
-                                gameManager.recordPlayedCardAfterExternalResolution();
-                                initiatePaymentAgainstVictim(currentPlayer, victim, GameManager.DEBT_COLLECTOR_AMOUNT, "Debt Collector");
-                            }
-                        } else if (targetCard instanceof ItsMyBirthdayCard) {
-                            gameManager.removeFromCurrentPlayerHand(targetCard);
-                            gameManager.getCardManager().playCard(targetCard);
-                            gameManager.recordPlayedCardAfterExternalResolution();
-                            List<PlayerManagement> victims = new ArrayList<>();
-                            for (PlayerManagement p : gameManager.getPlayersView()) {
-                                if (p != currentPlayer) victims.add(p);
-                            }
-                            if (!victims.isEmpty()) {
-                                initiateBatchPayment(currentPlayer, victims, GameManager.BIRTHDAY_AMOUNT, "It's My Birthday");
-                            } else {
-                                broadcastGameState();
-                            }
-                        } else if (targetCard instanceof PassGoCard) {
-                            gameManager.playActionCard(targetCard);
-                            broadcastGameState();
-                        } else {
-                            gameManager.playActionCard(targetCard);
-                            broadcastGameState();
-                        }
-                        break;
-                    }
-                    default:
-                        send(NetworkProtocol.error("Unknown action type"));
-                }
+                dispatchCardAction(actionType, parts, currentPlayer, targetCard);
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Action failed: " + e.getMessage(), e);
                 send(NetworkProtocol.error("Action failed: " + e.getMessage()));
+            }
+        }
+
+        /** Returns true if the action was consumed by JSN-action waiting. */
+        private boolean waitingForJsnAction(String action, PlayerManagement currentPlayer) {
+            if (!isWaitingForJsnAction) return false;
+
+            if (pendingJsnResponder == null || !currentPlayer.getPlayerId().equals(pendingJsnResponder.getPlayerId())) {
+                send(NetworkProtocol.error("Waiting for another player's response"));
+                return true;
+            }
+            if (action.startsWith("JUST_SAY_NO_RESPONSE:")) {
+                handleJustSayNoResponse(action.substring(21), currentPlayer);
+            } else {
+                send(NetworkProtocol.error("Invalid response format"));
+            }
+            return true;
+        }
+
+        /** Returns true if the action was consumed by payment-flow waiting. */
+        private boolean waitingForPaymentResponse(String action, PlayerManagement currentPlayer) {
+            if (!isWaitingForJsn && !isWaitingForPayment) return false;
+
+            String expectedResponderId = isWaitingForJsn ? pendingPaymentJsnResponderId : pendingVictimId;
+            if (!currentPlayer.getPlayerId().equals(expectedResponderId)) {
+                send(NetworkProtocol.error("Waiting for another player's response"));
+                return true;
+            }
+            if (isWaitingForJsn && action.startsWith("JUST_SAY_NO_RESPONSE:")) {
+                handlePaymentJustSayNo(action, currentPlayer);
+                return true;
+            }
+            if (isWaitingForPayment && action.startsWith("PAYMENT_RESPONSE:")) {
+                handlePaymentResponse(action.substring(17), currentPlayer);
+                return true;
+            }
+            send(NetworkProtocol.error("You must respond to the payment request"));
+            return true;
+        }
+
+        private void handlePaymentJustSayNo(String action, PlayerManagement currentPlayer) {
+            String[] parts = action.split(":");
+            if ("YES".equals(parts[1])) {
+                Card jsnCard = findCardInHand(currentPlayer, parts[2]);
+                if (jsnCard != null) {
+                    currentPlayer.removeFromHand(jsnCard);
+                    gameManager.getCardManager().playCard(jsnCard);
+
+                    pendingPaymentCanceledByJsn = currentPlayer.getPlayerId().equals(pendingVictimId);
+                    PlayerManagement nextResponder = pendingPaymentCanceledByJsn
+                            ? findPlayerById(pendingCollectorId)
+                            : findPlayerById(pendingVictimId);
+                    if (nextResponder != null && findJustSayNoCard(nextResponder) != null) {
+                        pendingPaymentJsnResponderId = nextResponder.getPlayerId();
+                        NetworkProtocol req = new NetworkProtocol();
+                        req.setType(NetworkProtocol.MessageType.ASK_JUST_SAY_NO);
+                        req.setContent(currentPlayer.getName() + ":Just Say No");
+                        sendToPlayer(nextResponder.getPlayerId(), req);
+                        broadcastGameState();
+                        return;
+                    }
+                }
+                if (pendingPaymentCanceledByJsn) {
+                    clearSinglePaymentState();
+                    continueBatchOrBroadcast();
+                } else {
+                    resolvePaymentAfterJustSayNoDeclined();
+                }
+            } else {
+                if (pendingPaymentCanceledByJsn) {
+                    clearSinglePaymentState();
+                    continueBatchOrBroadcast();
+                } else {
+                    resolvePaymentAfterJustSayNoDeclined();
+                }
+            }
+        }
+
+        private void handleEndTurn(PlayerManagement currentPlayer) {
+            gameManager.confirmCurrentPlayerTurnEnded();
+            if (gameManager.canAdvanceTurn()) {
+                gameManager.advanceTurn();
+                broadcastGameState();
+                return;
+            }
+            int handCount = currentPlayer.getHandCardCount();
+            if (handCount > PlayerManagement.MAX_HAND_SIZE) {
+                send(NetworkProtocol.error("Hand limit exceeded. Discard until you have 7 or fewer cards."));
+            } else {
+                send(NetworkProtocol.error("Cannot end turn right now."));
+            }
+            broadcastGameState();
+        }
+
+        private void handleSwitchPropertyColor(String[] parts, PlayerManagement currentPlayer, String cardId) {
+            if (parts.length < 3) {
+                send(NetworkProtocol.error("Invalid property color switch format"));
+                return;
+            }
+            Card propertyCard = findPropertyCardById(currentPlayer, cardId);
+            if (!(propertyCard instanceof PropertyCard pc)) {
+                send(NetworkProtocol.error("Property card not found"));
+                return;
+            }
+            if (!(propertyCard instanceof BiColorWildPropertyCard || propertyCard instanceof MultiColorWildPropertyCard)) {
+                send(NetworkProtocol.error("Only wild property cards can switch color"));
+                return;
+            }
+            Color targetColor = Color.valueOf(parts[2]);
+            if (currentPlayer.movePropertyCardToColor(pc, targetColor)) {
+                broadcastGameState();
+            } else {
+                send(NetworkProtocol.error("Failed to switch property color"));
+            }
+        }
+
+        private void dispatchCardAction(String actionType, String[] parts, PlayerManagement currentPlayer, Card targetCard) {
+            switch (actionType) {
+                case "DEPOSIT":
+                    gameManager.depositMoneyCard(targetCard);
+                    broadcastGameState();
+                    break;
+                case "DISCARD":
+                    handleDiscard(currentPlayer, targetCard);
+                    break;
+                case "PLACE_PROPERTY":
+                    handlePlaceProperty(parts, currentPlayer, targetCard);
+                    break;
+                case "PLAY_ACTION":
+                    handlePlayAction(parts, currentPlayer, targetCard);
+                    break;
+                default:
+                    send(NetworkProtocol.error("Unknown action type"));
+            }
+        }
+
+        private void handleDiscard(PlayerManagement currentPlayer, Card targetCard) {
+            gameManager.removeFromCurrentPlayerHand(targetCard);
+            gameManager.getCardManager().playCard(targetCard);
+            if (currentPlayer.getHandCardCount() <= PlayerManagement.MAX_HAND_SIZE) {
+                gameManager.confirmCurrentPlayerTurnEnded();
+                if (gameManager.canAdvanceTurn()) gameManager.advanceTurn();
+            }
+            broadcastGameState();
+        }
+
+        private void handlePlaceProperty(String[] parts, PlayerManagement currentPlayer, Card targetCard) {
+            if (!(targetCard instanceof PropertyCard pc)) return;
+            if (pc.getPlayableColors().isEmpty()) return;
+            Color placeSelectedColor;
+            if (parts.length >= 3) {
+                placeSelectedColor = Color.valueOf(parts[2]);
+            } else {
+                placeSelectedColor = pc.getPlayableColors().iterator().next();
+            }
+            if (!pc.getPlayableColors().contains(placeSelectedColor)) {
+                send(NetworkProtocol.error("This property card cannot be used for " + placeSelectedColor.getDisplayName()));
+                return;
+            }
+            gameManager.placePropertyCard(pc, currentPlayer, placeSelectedColor);
+            broadcastGameState();
+        }
+
+        private void handlePlayAction(String[] parts, PlayerManagement currentPlayer, Card targetCard) {
+            if (!(targetCard instanceof ActionCard)) {
+                send(NetworkProtocol.error("Not an action card"));
+                return;
+            }
+
+            if (tryHandleRentAction(parts, currentPlayer, targetCard)) return;
+            if (tryHandleBuildingAction(parts, currentPlayer, targetCard)) return;
+
+            if (targetCard instanceof SlyDealCard && parts.length == 4) {
+                executeSlyDealDirectly(currentPlayer, targetCard, parts[2], parts[3]);
+            } else if (targetCard instanceof ForcedDealCard && parts.length == 5) {
+                executeForcedDealDirectly(currentPlayer, targetCard, parts[2], parts[3], parts[4]);
+            } else if (targetCard instanceof DealBreakerCard && parts.length == 4) {
+                executeDealBreakerDirectly(currentPlayer, targetCard, parts[2], parts[3]);
+            } else if (targetCard instanceof DebtCollectorCard && parts.length == 3) {
+                handleDebtCollector(currentPlayer, targetCard, parts[2]);
+            } else if (targetCard instanceof ItsMyBirthdayCard) {
+                handleItsMyBirthday(currentPlayer, targetCard);
+            } else if (targetCard instanceof PassGoCard) {
+                gameManager.playActionCard(targetCard);
+                broadcastGameState();
+            } else {
+                gameManager.playActionCard(targetCard);
+                broadcastGameState();
+            }
+        }
+
+        /** Returns true if the action was handled as a rent action. */
+        private boolean tryHandleRentAction(String[] parts, PlayerManagement currentPlayer, Card targetCard) {
+            if (parts.length < 4) return false;
+            if (!"BI_RENT".equals(parts[2]) && !"WILD_RENT".equals(parts[2])) return false;
+
+            String rentMode = parts[2];
+            Color rentSelectedColor = Color.valueOf(parts[3]);
+            String targetPlayerId = null;
+            String doubleCardId = "NONE";
+
+            if ("WILD_RENT".equals(rentMode)) {
+                if (parts.length < 6) {
+                    send(NetworkProtocol.error("Invalid WILD_RENT format"));
+                    return true;
+                }
+                targetPlayerId = parts[4];
+                doubleCardId = parts[5];
+            } else {
+                if (parts.length < 5) {
+                    send(NetworkProtocol.error("Invalid BI_RENT format"));
+                    return true;
+                }
+                doubleCardId = parts[4];
+            }
+
+            executeRentDirectly(currentPlayer, targetCard, rentMode, rentSelectedColor, targetPlayerId, doubleCardId);
+            return true;
+        }
+
+        /** Returns true if the action was handled as a building action. */
+        private boolean tryHandleBuildingAction(String[] parts, PlayerManagement currentPlayer, Card targetCard) {
+            if (parts.length < 4 || !"BUILDING".equals(parts[2])) return false;
+            Color buildingSelectedColor = Color.valueOf(parts[3]);
+            executeBuildingDirectly(currentPlayer, targetCard, buildingSelectedColor);
+            broadcastGameState();
+            return true;
+        }
+
+        private void handleDebtCollector(PlayerManagement currentPlayer, Card targetCard, String victimId) {
+            PlayerManagement victim = findPlayerById(victimId);
+            if (victim == null) return;
+            gameManager.removeFromCurrentPlayerHand(targetCard);
+            gameManager.getCardManager().playCard(targetCard);
+            gameManager.recordPlayedCardAfterExternalResolution();
+            initiatePaymentAgainstVictim(currentPlayer, victim, GameManager.DEBT_COLLECTOR_AMOUNT, "Debt Collector");
+        }
+
+        private void handleItsMyBirthday(PlayerManagement currentPlayer, Card targetCard) {
+            gameManager.removeFromCurrentPlayerHand(targetCard);
+            gameManager.getCardManager().playCard(targetCard);
+            gameManager.recordPlayedCardAfterExternalResolution();
+            List<PlayerManagement> victims = new ArrayList<>();
+            for (PlayerManagement p : gameManager.getPlayersView()) {
+                if (p != currentPlayer) victims.add(p);
+            }
+            if (!victims.isEmpty()) {
+                initiateBatchPayment(currentPlayer, victims, GameManager.BIRTHDAY_AMOUNT, "It's My Birthday");
+            } else {
+                broadcastGameState();
             }
         }
 
