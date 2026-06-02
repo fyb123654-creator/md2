@@ -84,16 +84,17 @@ mvnw test
 - In-game chat + event log
 - Card hover preview with magnification
 - Customizable player names and avatars
-- Card selection indicator (black dot)
-- Property set-size labels on card faces (x2/x3/x4)
 - CSS theming
 
 ## Tests
 
-14 test cases covering core game logic:
+26 test cases across 6 test classes:
 
 | Test Class | Cases | Coverage |
 |-----------|-------|----------|
 | GameManagerTest | 5 | Init, bank deposit, property placement, turn advance, steal-to-win |
 | CardManagerTest | 1 | Draw pile reshuffle from discard |
 | ActionCardTest | 8 | SlyDeal steal & JustSayNo cancel, DealBreaker set theft, DebtCollector charge, PassGo draw, It'sMyBirthday mass charge |
+| PlayerManagementTest | 5 | Asset valuation, asset transfer, set completion, rent with buildings |
+| GameStateDataTest | 4 | Card serialization round-trip, player data, game state DTO |
+| PropertyRentRulesTest | 3 | Rent values for brown, dark blue, and railroad sets |
