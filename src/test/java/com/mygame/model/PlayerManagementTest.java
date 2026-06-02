@@ -41,7 +41,7 @@ public class PlayerManagementTest {
         assertEquals(0, payer.calculateAssetTotalValue());
         assertEquals(0, payer.getBankCardsView().size());
         assertEquals(0, payer.getPropertyCount(Color.RED));
-        assertEquals(5, collector.calculateAssetTotalValue());
+        assertEquals(2, collector.getHandCardCount());
     }
 
     @Test
