@@ -159,7 +159,7 @@ public class NetworkGameController {
 
             statusLabel.setText("Creating server...");
             lobbyPlayers.clear();
-            lobbyPlayers.add("Player 1 (You)");
+            lobbyPlayers.add("Player1 (You)");
             refreshLobbyPlayerList();
             localReady = false;
             if (readyButton != null) {
@@ -171,7 +171,7 @@ public class NetworkGameController {
                 startButton.setDisable(true);
             }
 
-            gameServer = new GameServer(port, playerCount, AppSettings.getInstance().getPlayerName());
+            gameServer = new GameServer(port, playerCount, AppSettings.getInstance().getPlayerName(), AppSettings.getInstance().getAvatarId());
             gameServer.setListener(new GameServer.OnGameStateChangeListener() {
                 @Override
                 public void onStateChanged(GameStateData state) {
@@ -258,6 +258,7 @@ public class NetworkGameController {
 
             gameClient = new GameClient(address, port);
             gameClient.setLocalPlayerName(AppSettings.getInstance().getPlayerName());
+            gameClient.setLocalAvatarId(AppSettings.getInstance().getAvatarId());
             gameClient.setListener(new GameClient.OnMessageReceivedListener() {
                 @Override
                 public void onConnected() {

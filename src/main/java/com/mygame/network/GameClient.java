@@ -25,7 +25,8 @@ public class GameClient {
     private OnMessageReceivedListener listener;
     private volatile GameStateData lastGameState;
     private volatile int assignedPlayerIndex = -1;
-    private String localPlayerName = "Player";
+    private String localPlayerName = "";
+    private int localAvatarId = 0;
 
     public interface OnMessageReceivedListener {
         void onConnected();
@@ -51,10 +52,14 @@ public class GameClient {
 
     public void setLocalPlayerName(String localPlayerName) {
         if (localPlayerName == null || localPlayerName.isBlank()) {
-            this.localPlayerName = "Player";
+            this.localPlayerName = "";
             return;
         }
         this.localPlayerName = localPlayerName.trim();
+    }
+
+    public void setLocalAvatarId(int localAvatarId) {
+        this.localAvatarId = Math.max(0, localAvatarId);
     }
 
     public void setListener(OnMessageReceivedListener listener) {
@@ -74,7 +79,7 @@ public class GameClient {
                 connected = true;
                 
                 // Send connect request
-                out.writeObject(NetworkProtocol.connect(localPlayerName));
+                out.writeObject(NetworkProtocol.connect((localPlayerName == null ? "" : localPlayerName) + "|" + localAvatarId));
                 out.flush();
                 
                 // Receive connect ack

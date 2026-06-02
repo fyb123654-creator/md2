@@ -4,7 +4,8 @@ public final class AppSettings {
     private static final AppSettings INSTANCE = new AppSettings();
 
     private int offlinePlayerCount = 3;
-    private String playerName = "Player";
+    private String playerName = "";
+    private int avatarId = 0;
     private boolean onboardingShown = false;
 
     private AppSettings() {
@@ -28,10 +29,18 @@ public final class AppSettings {
 
     public void setPlayerName(String playerName) {
         if (playerName == null || playerName.isBlank()) {
-            this.playerName = "Player";
+            this.playerName = "";
             return;
         }
         this.playerName = playerName.trim();
+    }
+
+    public int getAvatarId() {
+        return avatarId;
+    }
+
+    public void setAvatarId(int avatarId) {
+        this.avatarId = Math.max(0, avatarId);
     }
 
     public boolean isOnboardingShown() {

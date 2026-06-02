@@ -38,7 +38,7 @@ public class OnlineGameController {
         isHost = true;
         localPlayerIndex = 0;
 
-        gameServer = new GameServer(port, playerCount, AppSettings.getInstance().getPlayerName());
+        gameServer = new GameServer(port, playerCount, AppSettings.getInstance().getPlayerName(), AppSettings.getInstance().getAvatarId());
         gameServer.setListener(new GameServer.OnGameStateChangeListener() {
             @Override
             public void onStateChanged(GameStateData state) {

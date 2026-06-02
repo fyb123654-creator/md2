@@ -19,6 +19,7 @@ public class PlayerManagement {
 
     private final String playerId;
     private final String playerName;
+    private int avatarId;
 
     private final List<Card> handCards;
     private final List<Card> bankCards;
@@ -36,6 +37,7 @@ public class PlayerManagement {
 
         this.playerId = playerId;
         this.playerName = playerName;
+        this.avatarId = 0;
         this.handCards = new ArrayList<>();
         this.bankCards = new ArrayList<>();
         this.propertyZones = new EnumMap<>(Color.class);
@@ -47,6 +49,14 @@ public class PlayerManagement {
 
     public String getPlayerName() {
         return playerName;
+    }
+
+    public int getAvatarId() {
+        return avatarId;
+    }
+
+    public void setAvatarId(int avatarId) {
+        this.avatarId = Math.max(0, avatarId);
     }
 
     // Compatibility alias for UI code

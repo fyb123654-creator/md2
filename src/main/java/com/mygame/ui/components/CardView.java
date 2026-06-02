@@ -7,6 +7,9 @@ import com.mygame.cards.money.MoneyCard;
 import com.mygame.cards.property.*;
 import com.mygame.cards.rent.*;
 
+import javafx.animation.Interpolator;
+import javafx.animation.ScaleTransition;
+import javafx.animation.SequentialTransition;
 import javafx.scene.control.Button;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.VBox;
@@ -18,6 +21,7 @@ import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.stage.Popup;
+import javafx.util.Duration;
 
 /**
  * Card view component.
@@ -32,7 +36,9 @@ public class CardView extends Button {
     private final Card card;
     private final boolean small;
     private VBox cardContent;
+    private VBox backContent;
     private Popup hoverPreviewPopup;
+    private boolean faceDown;
 
     public CardView(Card card) {
         this(card, false);
@@ -147,6 +153,16 @@ public class CardView extends Button {
                 "-fx-background-color: transparent; -fx-padding: 0;"
         );
 
+        backContent = new VBox();
+        backContent.setPadding(new Insets(8));
+        backContent.setAlignment(javafx.geometry.Pos.CENTER);
+        backContent.setSpacing(4);
+        backContent.setPrefSize(width, height);
+        backContent.setMinSize(width, height);
+        backContent.setMaxSize(width, height);
+        backContent.getStyleClass().add("card-back");
+
+        setFaceDown(false);
         installHoverZoom();
     }
 
@@ -154,7 +170,6 @@ public class CardView extends Button {
         if (cardContent == null) return;
 
         setOnMouseEntered(e -> showHoverPreview(e.getScreenX(), e.getScreenY()));
-        setOnMouseMoved(e -> moveHoverPreview(e.getScreenX(), e.getScreenY()));
         setOnMouseExited(e -> hideHoverPreview());
     }
 
@@ -163,13 +178,14 @@ public class CardView extends Button {
 
         if (hoverPreviewPopup == null) {
             hoverPreviewPopup = new Popup();
-            hoverPreviewPopup.setAutoHide(true);
+            hoverPreviewPopup.setAutoHide(false);
             hoverPreviewPopup.setHideOnEscape(true);
         } else {
             hoverPreviewPopup.getContent().clear();
         }
 
         VBox preview = createHoverPreviewContent();
+        preview.setMouseTransparent(true);
         preview.setStyle(preview.getStyle() + "; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 18, 0.25, 0, 6);");
         hoverPreviewPopup.getContent().add(preview);
         hoverPreviewPopup.show(getScene().getWindow(), screenX + 18, screenY + 18);
@@ -214,12 +230,6 @@ public class CardView extends Button {
         preview.getChildren().add(valueLabel);
 
         return preview;
-    }
-
-    private void moveHoverPreview(double screenX, double screenY) {
-        if (hoverPreviewPopup == null || !hoverPreviewPopup.isShowing()) return;
-        hoverPreviewPopup.setX(screenX + 18);
-        hoverPreviewPopup.setY(screenY + 18);
     }
 
     private void hideHoverPreview() {
@@ -501,5 +511,43 @@ public class CardView extends Button {
 
     public Card getCard() {
         return card;
+    }
+
+    public boolean isFaceDown() {
+        return faceDown;
+    }
+
+    public void setFaceDown(boolean faceDown) {
+        this.faceDown = faceDown;
+        setGraphic(faceDown ? backContent : cardContent);
+    }
+
+    public void playFlip(boolean toFaceDown) {
+        playFlip(toFaceDown, null);
+    }
+
+    public void playFlip(boolean toFaceDown, Runnable after) {
+        if (toFaceDown == this.faceDown) {
+            if (after != null) {
+                after.run();
+            }
+            return;
+        }
+        ScaleTransition t1 = new ScaleTransition(Duration.millis(120), this);
+        t1.setFromX(1);
+        t1.setToX(0);
+        t1.setInterpolator(Interpolator.EASE_IN);
+        t1.setOnFinished(e -> setFaceDown(toFaceDown));
+
+        ScaleTransition t2 = new ScaleTransition(Duration.millis(120), this);
+        t2.setFromX(0);
+        t2.setToX(1);
+        t2.setInterpolator(Interpolator.EASE_OUT);
+
+        SequentialTransition seq = new SequentialTransition(t1, t2);
+        if (after != null) {
+            seq.setOnFinished(e -> after.run());
+        }
+        seq.play();
     }
 }

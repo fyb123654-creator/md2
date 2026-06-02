@@ -12,8 +12,15 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class GameApp extends Application {
 
@@ -36,6 +43,31 @@ public class GameApp extends Application {
         TextField nameField = new TextField(AppSettings.getInstance().getPlayerName());
         nameField.setMaxWidth(360);
         nameField.setPromptText("Enter your name");
+
+        HBox avatarRow = new HBox(12);
+        avatarRow.setStyle("-fx-alignment: center;");
+        List<Button> avatarButtons = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            int avatarId = i;
+            Button avatarButton = new Button();
+            avatarButton.setPrefSize(44, 44);
+            avatarButton.setMinSize(44, 44);
+            avatarButton.setMaxSize(44, 44);
+            avatarButton.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+
+            StackPane icon = new StackPane();
+            Circle circle = new Circle(18);
+            circle.setFill(getAvatarColor(avatarId));
+            icon.getChildren().add(circle);
+            avatarButton.setGraphic(icon);
+            avatarButton.setOnAction(e -> {
+                AppSettings.getInstance().setAvatarId(avatarId);
+                updateAvatarButtonStyles(avatarButtons);
+            });
+            avatarButtons.add(avatarButton);
+            avatarRow.getChildren().add(avatarButton);
+        }
+        updateAvatarButtonStyles(avatarButtons);
 
         Button singlePlayerBtn = new Button("Single Player");
         singlePlayerBtn.setStyle("-fx-padding: 15 40; -fx-font-size: 18px; -fx-font-weight: bold; " +
@@ -69,7 +101,7 @@ public class GameApp extends Application {
             alert.showAndWait();
         });
 
-        root.getChildren().addAll(title, nameField, singlePlayerBtn, onlineBtn, helpBtn);
+        root.getChildren().addAll(title, nameField, avatarRow, singlePlayerBtn, onlineBtn, helpBtn);
 
         Scene scene = new Scene(root, 960, 640);
         applyTheme(scene);
@@ -93,6 +125,26 @@ public class GameApp extends Application {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void updateAvatarButtonStyles(List<Button> buttons) {
+        int selected = AppSettings.getInstance().getAvatarId();
+        for (int i = 0; i < buttons.size(); i++) {
+            Button b = buttons.get(i);
+            boolean active = i == selected;
+            b.setStyle("-fx-background-color: transparent; -fx-padding: 0; -fx-border-radius: 999; -fx-background-radius: 999; -fx-border-width: 3; -fx-border-color: "
+                    + (active ? "#ffffff" : "rgba(255,255,255,0.25)") + ";");
+        }
+    }
+
+    private Color getAvatarColor(int avatarId) {
+        return switch (Math.floorMod(avatarId, 5)) {
+            case 0 -> Color.web("#3b82f6");
+            case 1 -> Color.web("#22c55e");
+            case 2 -> Color.web("#f59e0b");
+            case 3 -> Color.web("#ef4444");
+            default -> Color.web("#a855f7");
+        };
     }
 
     private void startOnlineMultiplayer() {

@@ -7,6 +7,7 @@
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <!-- Root ScrollPane improves small-screen usability -->
@@ -34,12 +35,23 @@
 
     <center>
         <VBox alignment="CENTER" spacing="18" style="-fx-padding: 18px; -fx-background-color: rgba(255,255,255,0.62); -fx-background-radius: 14;">
-            <Label fx:id="clientInfoLabel" text="Player" style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2f4f6f;"/>
+            <HBox alignment="CENTER" spacing="12">
+                <StackPane fx:id="clientAvatarPane"/>
+                <Label fx:id="clientInfoLabel" text="Player" style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2f4f6f;"/>
+            </HBox>
             <HBox alignment="CENTER" spacing="12">
                 <Label fx:id="turnInfoLabel" text="Game not started" style="-fx-font-size: 24px;"/>
                 <Button fx:id="helpButton" text="Help" onAction="#onHelpClicked" styleClass="primary"/>
             </HBox>
             <Label fx:id="hintLabel" text="" styleClass="hint important"/>
+            <HBox alignment="CENTER" spacing="26">
+                <StackPane fx:id="drawPilePane" styleClass="pile">
+                    <Label fx:id="drawPileCountLabel" text="0" styleClass="pile-count"/>
+                </StackPane>
+                <StackPane fx:id="discardPilePane" styleClass="pile">
+                    <Label fx:id="discardPileCountLabel" text="0" styleClass="pile-count"/>
+                </StackPane>
+            </HBox>
             <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" style="-fx-font-size: 18px; -fx-padding: 10 22; -fx-background-color: linear-gradient(#ffcd72, #f0a93b); -fx-text-fill: #2b2b2b; -fx-font-weight: bold; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #c9851f;"/>
             <TextArea fx:id="logArea" editable="false" wrapText="true" prefRowCount="6" prefWidth="860.0"/>
             <Label text="Chat" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
