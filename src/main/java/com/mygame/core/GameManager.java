@@ -73,7 +73,7 @@ public class GameManager {
     public void setPlayerCount(int playerCount) {
         List<String> names = new ArrayList<>();
         for (int i = 1; i <= playerCount; i++) {
-            names.add("Player " + i);
+            names.add("Player" + i);
         }
         setPlayerCount(playerCount, names);
     }
@@ -89,7 +89,7 @@ public class GameManager {
         for (int i = 1; i <= playerCount; i++) {
             String name = Objects.requireNonNullElse(playerNames.get(i - 1), "").trim();
             if (name.isBlank()) {
-                name = "Player " + i;
+                name = "Player" + i;
             }
             players.add(new PlayerManagement(String.valueOf(i), name));
         }
@@ -336,6 +336,7 @@ public class GameManager {
         currentPlayer.playCard(card, cardManager);
         playedCardsThisTurn++;
         checkVictoryCondition();
+        checkDeckExhaustionEndGameIfStuck();
     }
 
     public void playActionCard(Card card) {
@@ -354,6 +355,7 @@ public class GameManager {
         playedCardsThisTurn++;
         checkVictoryCondition();
         fireEvent(GameEventType.ACTION_RESOLVED, getCurrentPlayer().getName() + " played " + card.getName());
+        checkDeckExhaustionEndGameIfStuck();
     }
 
     /**
@@ -367,6 +369,7 @@ public class GameManager {
         ensureCanPlay();
         playedCardsThisTurn++;
         checkVictoryCondition();
+        checkDeckExhaustionEndGameIfStuck();
     }
 
     public PlayerManagement chooseTargetPlayerExcludingCurrent() {
@@ -581,11 +584,13 @@ public class GameManager {
         playedCardsThisTurn = 0;
         currentPlayerEndedTurn = false;
         PlayerManagement currentPlayer = players.get(currentPlayerIndex);
-        List<Card> cards = cardManager.drawCards(TURN_DRAW_CARD_COUNT);
+        int space = PlayerManagement.MAX_HAND_SIZE - currentPlayer.getHandCardCount();
+        int drawCount = Math.max(0, Math.min(TURN_DRAW_CARD_COUNT, space));
+        List<Card> cards = cardManager.drawCards(drawCount);
         for (Card card : cards) {
             currentPlayer.addToHand(card);
         }
-        fireEvent(GameEventType.TURN_STARTED, "Turn: " + currentPlayer.getName() + " (+2 cards)");
+        fireEvent(GameEventType.TURN_STARTED, "Turn: " + currentPlayer.getName() + " (+" + cards.size() + " card" + (cards.size() == 1 ? "" : "s") + ")");
         checkDeckExhaustionEndGameIfStuck();
     }
 

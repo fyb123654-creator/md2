@@ -13,12 +13,19 @@ public class CardManagerTest {
     @Test
     void drawCard_reshufflesDiscardWhenDrawPileEmpty() {
         CardManager cardManager = new CardManager(List.of());
-        Card card = new MoneyCard("m1", "1M", 1);
-        cardManager.playCard(card);
+        Card card1 = new MoneyCard("m1", "1M", 1);
+        Card card2 = new MoneyCard("m2", "2M", 2);
+        cardManager.playCard(card1);
+        cardManager.playCard(card2);
 
-        Card drawn = cardManager.drawCard();
+        Card drawn1 = cardManager.drawCard();
+        Card drawn2 = cardManager.drawCard();
 
-        assertSame(card, drawn);
+        assertNotNull(drawn1);
+        assertNotNull(drawn2);
+        assertNotSame(drawn1, drawn2);
+        assertTrue(drawn1 == card1 || drawn1 == card2);
+        assertTrue(drawn2 == card1 || drawn2 == card2);
         assertEquals(0, cardManager.getDiscardPileSize());
         assertEquals(0, cardManager.getDrawPileSize());
     }

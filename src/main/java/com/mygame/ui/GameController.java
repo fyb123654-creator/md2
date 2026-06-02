@@ -27,19 +27,29 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.Tooltip;
+import javafx.scene.Node;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Circle;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.animation.FadeTransition;
 import javafx.animation.Animation;
+import javafx.animation.Interpolator;
 import javafx.animation.TranslateTransition;
 import javafx.util.Duration;
 import javafx.geometry.Bounds;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.TransferMode;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,6 +69,8 @@ public class GameController {
     @FXML
     private VBox opponentAreaBox;
     @FXML
+    private StackPane clientAvatarPane;
+    @FXML
     private Label clientInfoLabel;
     @FXML
     private Label turnInfoLabel;
@@ -76,6 +88,14 @@ public class GameController {
     private TextField chatInput;
     @FXML
     private Button sendChatButton;
+    @FXML
+    private StackPane drawPilePane;
+    @FXML
+    private StackPane discardPilePane;
+    @FXML
+    private Label drawPileCountLabel;
+    @FXML
+    private Label discardPileCountLabel;
 
     // ---------------- Game data model ----------------
     private GameManager gameManager;
@@ -99,6 +119,8 @@ public class GameController {
     private boolean discardNoticeShown = false;
     private String defaultEndTurnText = "End Turn";
     private volatile int lastServerLocalHandCount = -1;
+    private final Set<String> lastRenderedHandCardIds = new HashSet<>();
+    private CardView hoveredHandCard;
 
     @FXML
     public void initialize() {
@@ -108,6 +130,172 @@ public class GameController {
         }
         if (chatInput != null) {
             chatInput.setOnAction(e -> onSendChatClicked());
+        }
+        setupHandPresentation();
+        setupPileVisuals();
+        setupDropTargets();
+    }
+
+    private void setupHandPresentation() {
+        if (myHandBox != null) {
+            myHandBox.setSpacing(-54);
+        }
+    }
+
+    private void setupPileVisuals() {
+        updatePileCounts(0, 0);
+    }
+
+    private void setupDropTargets() {
+        installDropTarget(myBankBox, PlayTarget.BANK);
+        installDropTarget(myPropertyBox, PlayTarget.PROPERTY);
+        installDropTarget(discardPilePane, PlayTarget.DISCARD);
+    }
+
+    private void installDropTarget(Node node, PlayTarget target) {
+        if (node == null) {
+            return;
+        }
+
+        node.setOnDragOver(e -> {
+            Dragboard db = e.getDragboard();
+            if (db == null || !db.hasString()) {
+                return;
+            }
+            String value = db.getString();
+            if (value == null || !value.startsWith("CARD:")) {
+                return;
+            }
+            e.acceptTransferModes(TransferMode.MOVE);
+            e.consume();
+        });
+
+        node.setOnDragDropped(e -> {
+            Dragboard db = e.getDragboard();
+            if (db == null || !db.hasString()) {
+                e.setDropCompleted(false);
+                return;
+            }
+            String value = db.getString();
+            if (value == null || !value.startsWith("CARD:")) {
+                e.setDropCompleted(false);
+                return;
+            }
+
+            String cardId = value.substring("CARD:".length());
+            Card card = findHandCardById(cardId);
+            if (card == null) {
+                e.setDropCompleted(false);
+                return;
+            }
+
+            boolean completed = handleDropPlay(card, target);
+            e.setDropCompleted(completed);
+            e.consume();
+        });
+    }
+
+    private Card findHandCardById(String cardId) {
+        if (cardId == null) {
+            return null;
+        }
+        for (var node : myHandBox.getChildren()) {
+            if (node instanceof CardView cv && cv.getCard() != null && cardId.equals(cv.getCard().getId())) {
+                return cv.getCard();
+            }
+        }
+        if (gameManager != null) {
+            PlayerManagement player = isOnlineMode
+                    ? (localPlayerIndex < gameManager.getPlayersView().size() ? gameManager.getPlayersView().get(localPlayerIndex) : null)
+                    : gameManager.getCurrentPlayer();
+            if (player != null) {
+                for (Card c : player.getHandCardsView()) {
+                    if (cardId.equals(c.getId())) {
+                        return c;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean handleDropPlay(Card card, PlayTarget target) {
+        if (card == null) {
+            return false;
+        }
+
+        if (target == PlayTarget.DISCARD) {
+            if (!discardMode) {
+                showError("You can only discard to the discard pile when discard mode is active.");
+                return false;
+            }
+            handleCardClick(card);
+            return true;
+        }
+
+        if (isOnlineMode) {
+            if (!isMyTurn || discardMode) {
+                showError("It's not your turn.");
+                return false;
+            }
+            if (target == PlayTarget.BANK) {
+                sendDepositAction(card);
+                return true;
+            }
+            if (target == PlayTarget.PROPERTY) {
+                sendPlacePropertyAction(card);
+                return true;
+            }
+            return false;
+        }
+
+        if (gameManager == null || !gameManager.canCurrentPlayerPlayCard()) {
+            return false;
+        }
+        if (target == PlayTarget.BANK) {
+            doDepositToBank(card);
+            return true;
+        }
+        if (target == PlayTarget.PROPERTY) {
+            doPlacePropertyCard(card);
+            return true;
+        }
+        return false;
+    }
+
+    private void updatePileCounts(int drawCount, int discardCount) {
+        if (drawPileCountLabel != null) {
+            drawPileCountLabel.setText(String.valueOf(Math.max(0, drawCount)));
+        }
+        if (discardPileCountLabel != null) {
+            discardPileCountLabel.setText(String.valueOf(Math.max(0, discardCount)));
+        }
+        renderPile(drawPilePane, drawPileCountLabel, drawCount);
+        renderPile(discardPilePane, discardPileCountLabel, discardCount);
+    }
+
+    private void renderPile(StackPane pilePane, Label countLabel, int count) {
+        if (pilePane == null) {
+            return;
+        }
+        pilePane.getChildren().clear();
+
+        int visible = Math.min(5, Math.max(0, count));
+        for (int i = 0; i < visible; i++) {
+            StackPane back = new StackPane();
+            back.getStyleClass().add("card-back");
+            back.setPrefSize(90, 130);
+            back.setMinSize(90, 130);
+            back.setMaxSize(90, 130);
+            back.setTranslateX(i * 1.8);
+            back.setTranslateY(-i * 1.8);
+            pilePane.getChildren().add(back);
+        }
+
+        if (countLabel != null) {
+            pilePane.getChildren().add(countLabel);
+            StackPane.setAlignment(countLabel, Pos.BOTTOM_RIGHT);
+            StackPane.setMargin(countLabel, new Insets(0, 6, 6, 0));
         }
     }
 
@@ -155,12 +343,17 @@ public class GameController {
             List<String> names = new ArrayList<>();
             for (int i = 1; i <= playerCount; i++) {
                 if (i == 1) {
-                    names.add(AppSettings.getInstance().getPlayerName());
+                    String localName = AppSettings.getInstance().getPlayerName();
+                    names.add(localName == null || localName.isBlank() ? "Player1" : localName);
                 } else {
-                    names.add("Player " + i);
+                    names.add("Player" + i);
                 }
             }
             localManager.setPlayerCount(playerCount, names);
+            for (int i = 0; i < localManager.getPlayersView().size(); i++) {
+                int avatarId = i == 0 ? AppSettings.getInstance().getAvatarId() : i;
+                localManager.getPlayersView().get(i).setAvatarId(avatarId);
+            }
             localManager.startRound();
             bindGameManager(localManager);
         }
@@ -207,6 +400,13 @@ public class GameController {
     private void sendChatMessage(String message) {
         if (isOnlineMode) {
             String sender = AppSettings.getInstance().getPlayerName();
+            if (sender == null || sender.isBlank()) {
+                if (gameManager != null && localPlayerIndex >= 0 && localPlayerIndex < gameManager.getPlayersView().size()) {
+                    sender = gameManager.getPlayersView().get(localPlayerIndex).getName();
+                } else {
+                    sender = "Player" + (localPlayerIndex + 1);
+                }
+            }
             if (isHost() && gameServer != null) {
                 appendChatLine(sender, message);
                 gameServer.broadcast(NetworkProtocol.chat(sender, message));
@@ -219,7 +419,11 @@ public class GameController {
             appendChatLine(sender, message);
             return;
         }
-        appendChatLine(AppSettings.getInstance().getPlayerName(), message);
+        String sender = AppSettings.getInstance().getPlayerName();
+        if (sender == null || sender.isBlank()) {
+            sender = "Player1";
+        }
+        appendChatLine(sender, message);
     }
 
     private void trimAndRefresh(List<String> lines, TextArea area) {
@@ -321,6 +525,7 @@ public class GameController {
 
         boolean wasMyTurn = isMyTurn;
         isMyTurn = (state.getCurrentPlayerIndex() == localPlayerIndex);
+        updatePileCounts(state.getDrawPileCount(), state.getDiscardPileCount());
         int localHandCount = state.getPlayers().size() > localPlayerIndex
                 ? state.getPlayers().get(localPlayerIndex).getHandCards().size()
                 : 0;
@@ -331,9 +536,6 @@ public class GameController {
             restoreEndTurnButtonTextIfNeeded();
             selectedHandCard = null;
             handActionBox.getChildren().clear();
-        }
-        if (isMyTurn && localHandCount > PlayerManagement.MAX_HAND_SIZE && !discardMode) {
-            startDiscardMode();
         }
         endTurnButton.setDisable(!isMyTurn || discardMode);
 
@@ -401,23 +603,11 @@ public class GameController {
         }
 
         GameStateData.PlayerData localPlayerData = players.get(localPlayerIndex);
-
-        // Clear current hand UI
-        myHandBox.getChildren().clear();
-
-        // Add hand cards with click handlers
+        List<Card> cards = new ArrayList<>();
         for (GameStateData.CardData cardData : localPlayerData.getHandCards()) {
-            Card card = cardData.toCard();
-            CardView cardView = new CardView(card);
-            cardView.setOnAction(event -> {
-                handleCardClick(card);
-            });
-            // Ensure card is clickable
-            cardView.setDisable(false);
-            cardView.setOpacity(1.0);
-            cardView.setMouseTransparent(false);
-            myHandBox.getChildren().add(cardView);
+            cards.add(cardData.toCard());
         }
+        renderHandCardsList(cards);
     }
 
     private void updateBankCardsFromServer(GameStateData state) {
@@ -518,6 +708,11 @@ public class GameController {
 
             Label nameLabel = new Label(playerData.getPlayerName());
             nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+            HBox header = new HBox(10);
+            header.setAlignment(Pos.CENTER_LEFT);
+            StackPane avatarPane = new StackPane();
+            renderAvatarInto(avatarPane, playerData.getAvatarId(), playerData.getPlayerName(), 14);
+            header.getChildren().addAll(avatarPane, nameLabel);
 
             Label handCountLabel = new Label("Hand cards: " + playerData.getHandCardCount());
 
@@ -556,7 +751,7 @@ public class GameController {
                 propertyRow.getChildren().add(new Label("None"));
             }
 
-            container.getChildren().addAll(nameLabel, handCountLabel, bankRow, propertyRow);
+            container.getChildren().addAll(header, handCountLabel, bankRow, propertyRow);
             opponentAreaBox.getChildren().add(container);
         }
 
@@ -581,6 +776,10 @@ public class GameController {
         PlayerManagement localPlayer = isOnlineMode
                 ? gameManager.getPlayersView().get(localPlayerIndex)
                 : currentPlayer;
+
+        if (gameManager.getCardManager() != null) {
+            updatePileCounts(gameManager.getCardManager().getDrawPileSize(), gameManager.getCardManager().getDiscardPileSize());
+        }
 
         updateClientInfo();
         String turnPlayerName = currentPlayer.getName();
@@ -635,7 +834,153 @@ public class GameController {
 
     // Render hand cards
     private void renderHandCards(PlayerManagement player) {
-        renderCardButtonRow(myHandBox, player.getHandCards(), true);
+        renderHandCardsList(player.getHandCards());
+    }
+
+    private void renderHandCardsList(List<Card> cards) {
+        if (myHandBox == null) {
+            return;
+        }
+
+        Set<String> newIds = new HashSet<>();
+        for (Card c : cards) {
+            if (c != null && c.getId() != null) {
+                newIds.add(c.getId());
+            }
+        }
+
+        Set<String> added = new HashSet<>();
+        boolean animateNewCards = !lastRenderedHandCardIds.isEmpty();
+        if (animateNewCards) {
+            for (String id : newIds) {
+                if (!lastRenderedHandCardIds.contains(id)) {
+                    added.add(id);
+                }
+            }
+        }
+        lastRenderedHandCardIds.clear();
+        lastRenderedHandCardIds.addAll(newIds);
+
+        myHandBox.getChildren().clear();
+        hoveredHandCard = null;
+
+        if (cards.isEmpty()) {
+            Label emptyView = new Label("No cards");
+            emptyView.setStyle("-fx-text-fill: #666666;");
+            myHandBox.getChildren().add(emptyView);
+            return;
+        }
+
+        boolean enabled = discardMode || !isOnlineMode || isMyTurn;
+
+        List<CardView> created = new ArrayList<>();
+        for (int i = 0; i < cards.size(); i++) {
+            Card card = cards.get(i);
+            CardView cardView = new CardView(card);
+            double baseViewOrder = -i;
+            cardView.getProperties().put("handBaseViewOrder", baseViewOrder);
+            cardView.setViewOrder(baseViewOrder);
+            cardView.setDisable(!enabled);
+            cardView.setOnAction(event -> handleCardClick(card));
+            installHandCardHover(cardView);
+            installHandCardDrag(cardView, card);
+            myHandBox.getChildren().add(cardView);
+            created.add(cardView);
+        }
+
+        if (animateNewCards && drawPilePane != null && !added.isEmpty()) {
+            for (CardView cv : created) {
+                if (cv.getCard() != null && added.contains(cv.getCard().getId())) {
+                    animateDrawFromPile(cv);
+                }
+            }
+        }
+    }
+
+    private void installHandCardHover(CardView cardView) {
+        if (cardView == null) {
+            return;
+        }
+        cardView.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> applyHandHover(cardView));
+        cardView.addEventHandler(MouseEvent.MOUSE_EXITED, e -> clearHandHover(cardView));
+    }
+
+    private void applyHandHover(CardView cardView) {
+        if (cardView == null) {
+            return;
+        }
+        if (hoveredHandCard != null && hoveredHandCard != cardView) {
+            clearHandHover(hoveredHandCard);
+        }
+        hoveredHandCard = cardView;
+        cardView.setViewOrder(-10000);
+        cardView.setTranslateY(-18);
+        cardView.setScaleX(1.12);
+        cardView.setScaleY(1.12);
+    }
+
+    private void clearHandHover(CardView cardView) {
+        if (cardView == null) {
+            return;
+        }
+        Object base = cardView.getProperties().get("handBaseViewOrder");
+        if (base instanceof Number n) {
+            cardView.setViewOrder(n.doubleValue());
+        } else {
+            cardView.setViewOrder(0);
+        }
+        cardView.setTranslateY(0);
+        cardView.setScaleX(1);
+        cardView.setScaleY(1);
+        if (hoveredHandCard == cardView) {
+            hoveredHandCard = null;
+        }
+    }
+
+    private void installHandCardDrag(CardView cardView, Card card) {
+        if (cardView == null || card == null) {
+            return;
+        }
+        cardView.setOnDragDetected(e -> {
+            boolean enabled = discardMode || !isOnlineMode || isMyTurn;
+            if (!enabled) {
+                return;
+            }
+            Dragboard db = cardView.startDragAndDrop(TransferMode.MOVE);
+            ClipboardContent content = new ClipboardContent();
+            content.putString("CARD:" + card.getId());
+            db.setContent(content);
+            cardView.setViewOrder(-10000);
+            e.consume();
+        });
+        cardView.setOnDragDone(e -> {
+            clearHandHover(cardView);
+        });
+    }
+
+    private void animateDrawFromPile(CardView cardView) {
+        if (cardView == null || drawPilePane == null) {
+            return;
+        }
+        cardView.setFaceDown(true);
+        Platform.runLater(() -> {
+            if (cardView.getScene() == null) {
+                cardView.setFaceDown(false);
+                return;
+            }
+            Bounds from = drawPilePane.localToScene(drawPilePane.getBoundsInLocal());
+            Bounds to = cardView.localToScene(cardView.getBoundsInLocal());
+            double dx = from.getMinX() - to.getMinX();
+            double dy = from.getMinY() - to.getMinY();
+            cardView.setTranslateX(dx);
+            cardView.setTranslateY(dy);
+            TranslateTransition tt = new TranslateTransition(Duration.millis(260), cardView);
+            tt.setToX(0);
+            tt.setToY(0);
+            tt.setInterpolator(Interpolator.EASE_OUT);
+            tt.setOnFinished(ev -> cardView.playFlip(false));
+            tt.play();
+        });
     }
 
     // Render bank cards
@@ -919,7 +1264,7 @@ public class GameController {
 
         // 3) No-parameter action cards
         sendActionToServer("PLAY_ACTION:" + card.getId());
-        removeCardFromHandUI(card);
+        animateHandCardToDiscard(card, () -> removeCardFromHandUI(card));
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -976,7 +1321,7 @@ public class GameController {
             sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":BI_RENT:" + selectedColor.name() + ":" + doubleCardId);
         }
 
-        removeCardFromHandUI(rentCard);
+        animateHandCardToDiscard(rentCard, () -> removeCardFromHandUI(rentCard));
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -1232,10 +1577,16 @@ public class GameController {
         }
 
         try {
-            gameManager.playActionCard(card);
-            selectedHandCard = null;
-            updateUI();
-            broadcastStateIfHost();
+            animateHandCardToDiscard(card, () -> {
+                try {
+                    gameManager.playActionCard(card);
+                    selectedHandCard = null;
+                    updateUI();
+                    broadcastStateIfHost();
+                } catch (Exception e) {
+                    showError("Action failed: " + e.getMessage());
+                }
+            });
         } catch (Exception e) {
             showError("Action failed: " + e.getMessage());
         }
@@ -1267,19 +1618,27 @@ public class GameController {
             }
 
             rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
-            gameManager.removeFromCurrentPlayerHand(rentCard);
-            gameManager.getCardManager().playCard(rentCard);
-            gameManager.recordPlayedCardAfterExternalResolution();
+            int finalRentAmount = rentAmount;
+            PlayerManagement finalTargetPlayer = targetPlayer;
+            animateHandCardToDiscard(rentCard, () -> {
+                try {
+                    gameManager.removeFromCurrentPlayerHand(rentCard);
+                    gameManager.getCardManager().playCard(rentCard);
+                    gameManager.recordPlayedCardAfterExternalResolution();
 
-            if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-                gameManager.chargePlayer(currentPlayer, targetPlayer, rentAmount);
-            } else {
-                gameManager.chargeAllOpponents(currentPlayer, rentAmount);
-            }
+                    if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
+                        gameManager.chargePlayer(currentPlayer, finalTargetPlayer, finalRentAmount);
+                    } else {
+                        gameManager.chargeAllOpponents(currentPlayer, finalRentAmount);
+                    }
 
-            selectedHandCard = null;
-            updateUI();
-            broadcastStateIfHost();
+                    selectedHandCard = null;
+                    updateUI();
+                    broadcastStateIfHost();
+                } catch (Exception e) {
+                    showError("Action failed: " + e.getMessage());
+                }
+            });
         } catch (Exception e) {
             showError("Action failed: " + e.getMessage());
         }
@@ -1341,6 +1700,39 @@ public class GameController {
             node instanceof CardView cv && cv.getCard() != null && cv.getCard().getId().equals(card.getId()));
     }
 
+    private void animateHandCardToDiscard(Card card, Runnable after) {
+        if (card == null) {
+            if (after != null) after.run();
+            return;
+        }
+        if (myHandBox == null) {
+            if (after != null) after.run();
+            return;
+        }
+        if (discardPilePane == null) {
+            if (after != null) after.run();
+            return;
+        }
+
+        CardView sourceView = null;
+        for (var node : myHandBox.getChildren()) {
+            if (node instanceof CardView cv) {
+                if (cv.getCard() != null && cv.getCard().getId().equals(card.getId())) {
+                    sourceView = cv;
+                    break;
+                }
+            }
+        }
+
+        if (sourceView == null) {
+            if (after != null) after.run();
+            return;
+        }
+
+        CardView finalSourceView = sourceView;
+        finalSourceView.playFlip(true, () -> animateHandCardToTarget(card, discardPilePane, after));
+    }
+
     private void animateHandCardToTarget(Card card, javafx.scene.Node targetNode, Runnable after) {
         if (card == null || myHandBox == null || targetNode == null) {
             if (after != null) after.run();
@@ -1369,15 +1761,24 @@ public class GameController {
         double dy = (to.getMinY() - from.getMinY());
 
         sourceView.setDisable(true);
-        sourceView.toFront();
+        sourceView.setViewOrder(-10000);
 
         TranslateTransition tt = new TranslateTransition(Duration.millis(220), sourceView);
         tt.setByX(dx);
         tt.setByY(dy);
         tt.setOnFinished(e -> {
-            sourceView.setTranslateX(0);
-            sourceView.setTranslateY(0);
             if (after != null) after.run();
+            if (sourceView.getParent() != null) {
+                sourceView.setTranslateX(0);
+                sourceView.setTranslateY(0);
+                Object base = sourceView.getProperties().get("handBaseViewOrder");
+                if (base instanceof Number n) {
+                    sourceView.setViewOrder(n.doubleValue());
+                } else {
+                    sourceView.setViewOrder(0);
+                }
+                sourceView.setDisable(false);
+            }
         });
         tt.play();
     }
@@ -1465,22 +1866,27 @@ public class GameController {
         // 1) Discard mode first
         if (discardMode) {
             if (isOnlineMode) { // Online discard command
-                sendActionToServer("DISCARD:" + card.getId());
-                removeCardFromHandUI(card);
+                animateHandCardToDiscard(card, () -> {
+                    sendActionToServer("DISCARD:" + card.getId());
+                    removeCardFromHandUI(card);
+                });
                 return;
             }
             // Offline discard logic
-            try {
-                gameManager.removeFromCurrentPlayerHand(card);
-                gameManager.getCardManager().playCard(card);
-                if (gameManager.getCurrentPlayer().getHandCardCount() <= PlayerManagement.MAX_HAND_SIZE) {
-                    discardMode = false;
-                    gameManager.advanceTurn();
+            animateHandCardToDiscard(card, () -> {
+                try {
+                    gameManager.removeFromCurrentPlayerHand(card);
+                    gameManager.getCardManager().playCard(card);
+                    if (gameManager.getCurrentPlayer().getHandCardCount() <= PlayerManagement.MAX_HAND_SIZE) {
+                        discardMode = false;
+                        gameManager.advanceTurn();
+                    }
+                    updateUI();
+                    broadcastStateIfHost();
+                } catch (Exception e) {
+                    showError("Failed to discard: " + e.getMessage());
                 }
-                updateUI();
-            } catch (Exception e) {
-                showError("Failed to discard: " + e.getMessage());
-            }
+            });
             return;
         }
 
@@ -1645,6 +2051,11 @@ public class GameController {
 
         Label nameLabel = new Label((isCurrentPlayer ? "[You] " : "") + player.getName());
         nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        HBox header = new HBox(10);
+        header.setAlignment(Pos.CENTER_LEFT);
+        StackPane avatarPane = new StackPane();
+        renderAvatarInto(avatarPane, player.getAvatarId(), player.getName(), 14);
+        header.getChildren().addAll(avatarPane, nameLabel);
 
         Label handCountLabel = new Label("Hand cards: " + player.getHandCardCount());
 
@@ -1701,7 +2112,7 @@ public class GameController {
             propertyRow.getChildren().add(new Label("None"));
         }
 
-        container.getChildren().addAll(nameLabel, handCountLabel, bankRow, propertyRow);
+        container.getChildren().addAll(header, handCountLabel, bankRow, propertyRow);
         return container;
     }
 
@@ -1725,6 +2136,40 @@ public class GameController {
 
         PlayerManagement localPlayer = gameManager.getPlayersView().get(localPlayerIndex);
         clientInfoLabel.setText("You are: " + localPlayer.getName() + " | Complete sets: " + localPlayer.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
+        renderAvatarInto(clientAvatarPane, localPlayer.getAvatarId(), localPlayer.getName(), 20);
+    }
+
+    private void renderAvatarInto(StackPane container, int avatarId, String name, double radius) {
+        if (container == null) {
+            return;
+        }
+        container.getChildren().clear();
+        Circle circle = new Circle(radius);
+        circle.setFill(getAvatarColor(avatarId));
+        Label initial = new Label(extractInitial(name));
+        initial.setStyle("-fx-text-fill: white; -fx-font-weight: 900; -fx-font-size: " + Math.max(12, (int) Math.round(radius)) + "px;");
+        container.getChildren().addAll(circle, initial);
+    }
+
+    private String extractInitial(String name) {
+        if (name == null) {
+            return "?";
+        }
+        String value = name.trim();
+        if (value.isEmpty()) {
+            return "?";
+        }
+        return value.substring(0, 1).toUpperCase();
+    }
+
+    private javafx.scene.paint.Color getAvatarColor(int avatarId) {
+        return switch (Math.floorMod(avatarId, 5)) {
+            case 0 -> javafx.scene.paint.Color.web("#3b82f6");
+            case 1 -> javafx.scene.paint.Color.web("#22c55e");
+            case 2 -> javafx.scene.paint.Color.web("#f59e0b");
+            case 3 -> javafx.scene.paint.Color.web("#ef4444");
+            default -> javafx.scene.paint.Color.web("#a855f7");
+        };
     }
 
     private String buildPropertySetTitle(PlayerManagement player, Color color, int currentCount) {
@@ -1865,7 +2310,15 @@ public class GameController {
         // Create a new local engine
         if (interactor == null) interactor = new Interactor();
         GameManager localManager = new GameManager();
-        localManager.setPlayerCount(state.getPlayers().size());
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < state.getPlayers().size(); i++) {
+            String n = state.getPlayers().get(i).getPlayerName();
+            if (n == null || n.isBlank()) {
+                n = "Player" + (i + 1);
+            }
+            names.add(n);
+        }
+        localManager.setPlayerCount(state.getPlayers().size(), names);
         localManager.syncTurnStateFromNetwork(state.getCurrentPlayerIndex(), state.getPlayedCardsThisTurn());
         bindGameManager(localManager);
 
@@ -1873,6 +2326,7 @@ public class GameController {
         for (int i = 0; i < state.getPlayers().size(); i++) {
             GameStateData.PlayerData pData = state.getPlayers().get(i);
             PlayerManagement pm = gameManager.getPlayersView().get(i);
+            pm.setAvatarId(pData.getAvatarId());
 
             // Restore hand
             for (GameStateData.CardData cd : pData.getHandCards()) {

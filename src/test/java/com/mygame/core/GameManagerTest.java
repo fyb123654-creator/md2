@@ -54,6 +54,7 @@ public class GameManagerTest {
         assertEquals(7, players.get(0).getHandCardCount());
         assertEquals(5, players.get(1).getHandCardCount());
         assertEquals(3, gameManager.getRemainingPlayCountThisTurn());
+        assertFalse(gameManager.hasWinner());
     }
 
     @Test
@@ -66,12 +67,14 @@ public class GameManagerTest {
         PlayerManagement me = gameManager.getCurrentPlayer();
         Card money = me.getHandCardsView().stream().filter(Card::canBeUsedAsMoney).findFirst().orElseThrow();
         int handBefore = me.getHandCardCount();
+        int playedBefore = gameManager.getPlayedCardsThisTurn();
 
         gameManager.depositMoneyCard(money);
 
         assertEquals(handBefore - 1, me.getHandCardCount());
         assertEquals(1, me.getBankCardsView().size());
         assertEquals(0, cardManager.getDiscardPileSize());
+        assertEquals(playedBefore + 1, gameManager.getPlayedCardsThisTurn());
     }
 
     @Test
@@ -83,11 +86,15 @@ public class GameManagerTest {
 
         PlayerManagement me = gameManager.getCurrentPlayer();
         Card property = me.getHandCardsView().stream().filter(Card::isPropertyCard).findFirst().orElseThrow();
+        int handBefore = me.getHandCardCount();
+        int playedBefore = gameManager.getPlayedCardsThisTurn();
 
         gameManager.placePropertyCard(property, me, Color.BROWN);
 
         assertEquals(1, me.getPropertyCount(Color.BROWN));
+        assertEquals(handBefore - 1, me.getHandCardCount());
         assertEquals(0, cardManager.getDiscardPileSize());
+        assertEquals(playedBefore + 1, gameManager.getPlayedCardsThisTurn());
     }
 
     @Test
@@ -122,9 +129,14 @@ public class GameManagerTest {
         StandardPropertyCard utilityToSteal = new StandardPropertyCard("p6", "Utility B", 2, Color.UTILITY, Map.of(1, 1, 2, 2));
         target.addProperty(Color.UTILITY, utilityToSteal);
 
+        assertEquals(1, me.getPropertyCount(Color.UTILITY));
+        assertEquals(1, target.getPropertyCount(Color.UTILITY));
         assertFalse(gameManager.hasWinner());
         assertTrue(gameManager.stealPropertyCard(target, utilityToSteal));
         assertTrue(gameManager.hasWinner());
+        assertEquals(2, me.getPropertyCount(Color.UTILITY));
+        assertEquals(0, target.getPropertyCount(Color.UTILITY));
+        assertTrue(me.isSetComplete(Color.UTILITY));
         assertEquals(me.getName(), gameManager.getWinner().getName());
     }
 }

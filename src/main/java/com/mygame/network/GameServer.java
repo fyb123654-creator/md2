@@ -38,6 +38,7 @@ public class GameServer {
     private volatile GameStateData lastBroadcastState;
     private final boolean[] readyFlags;
     private final String[] playerNames;
+    private final int[] playerAvatarIds;
 
     // Payment flow state (single payment)
     private boolean isWaitingForJsn = false;
@@ -103,7 +104,7 @@ public class GameServer {
         default void onChatMessage(String playerId, String message) {}
     }
 
-    public GameServer(int port, int playerCount, String hostName) {
+    public GameServer(int port, int playerCount, String hostName, int hostAvatarId) {
         this.port = port;
         this.expectedPlayerCount = playerCount;
         this.clients = new ArrayList<>();
@@ -111,9 +112,11 @@ public class GameServer {
         this.gameManager = new GameManager();
         this.readyFlags = new boolean[playerCount];
         this.playerNames = new String[playerCount];
+        this.playerAvatarIds = new int[playerCount];
         // Host is Player 1 (index 0)
         this.readyFlags[0] = false;
-        this.playerNames[0] = (hostName == null || hostName.isBlank()) ? "Player 1" : hostName.trim();
+        this.playerNames[0] = (hostName == null || hostName.isBlank()) ? "Player1" : hostName.trim();
+        this.playerAvatarIds[0] = Math.max(0, hostAvatarId);
     }
 
     public void setListener(OnGameStateChangeListener listener) {
@@ -152,11 +155,14 @@ public class GameServer {
             for (int i = 0; i < expectedPlayerCount; i++) {
                 String name = playerNames[i];
                 if (name == null || name.isBlank()) {
-                    name = "Player " + (i + 1);
+                    name = "Player" + (i + 1);
                 }
                 effectiveNames.add(name);
             }
             gameManager.setPlayerCount(expectedPlayerCount, effectiveNames);
+            for (int i = 0; i < expectedPlayerCount && i < gameManager.getPlayersView().size(); i++) {
+                gameManager.getPlayersView().get(i).setAvatarId(playerAvatarIds[i]);
+            }
             // Ensure startRound was called at least once
             if (gameManager.getCardManager() == null) {
                 gameManager.startRound();
@@ -413,14 +419,32 @@ public class GameServer {
         private void handleMessage(NetworkProtocol message) {
             switch (message.getType()) {
                 case CONNECT:
-                    String name = message.getContent();
+                    String payload = message.getContent();
+                    String name;
+                    int avatarId = playerIndex;
+                    if (payload == null) {
+                        name = "";
+                    } else {
+                        payload = payload.trim();
+                        String[] parts = payload.split("\\|", 2);
+                        name = parts.length > 0 ? parts[0] : "";
+                        if (parts.length == 2) {
+                            try {
+                                avatarId = Integer.parseInt(parts[1].trim());
+                            } catch (NumberFormatException ignored) {
+                                avatarId = playerIndex;
+                            }
+                        }
+                    }
                     if (name == null || name.isBlank()) {
-                        name = "Player " + (playerIndex + 1);
+                        name = "Player" + (playerIndex + 1);
                     } else {
                         name = name.trim();
                     }
+                    avatarId = Math.max(0, avatarId);
                     if (playerIndex >= 0 && playerIndex < playerNames.length) {
                         playerNames[playerIndex] = name;
+                        playerAvatarIds[playerIndex] = avatarId;
                     }
                     if (!registered) {
                         registered = true;

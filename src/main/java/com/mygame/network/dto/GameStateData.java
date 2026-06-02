@@ -102,6 +102,7 @@ public class GameStateData implements Serializable {
         private List<CardData> bankCards;
         private Map<Color, PropertyZoneData> propertyZones;
         private int handCardCount;
+        private int avatarId;
 
         public PlayerData() {
             this.handCards = new ArrayList<>();
@@ -114,6 +115,7 @@ public class GameStateData implements Serializable {
             data.playerId = player.getPlayerId();
             data.playerName = player.getName();
             data.handCardCount = player.getHandCardCount();
+            data.avatarId = player.getAvatarId();
             
             // Hand cards
             for (Card card : player.getHandCardsView()) {
@@ -146,6 +148,8 @@ public class GameStateData implements Serializable {
         public void setPropertyZones(Map<Color, PropertyZoneData> propertyZones) { this.propertyZones = propertyZones; }
         public int getHandCardCount() { return handCardCount; }
         public void setHandCardCount(int handCardCount) { this.handCardCount = handCardCount; }
+        public int getAvatarId() { return avatarId; }
+        public void setAvatarId(int avatarId) { this.avatarId = avatarId; }
     }
 
     /**
