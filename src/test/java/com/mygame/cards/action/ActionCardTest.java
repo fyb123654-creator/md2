@@ -2,8 +2,6 @@ package com.mygame.cards.action;
 
 import com.mygame.cards.base.Card;
 import com.mygame.cards.money.MoneyCard;
-import com.mygame.cards.property.BuildingCard;
-import com.mygame.cards.property.PropertyCard;
 import com.mygame.cards.property.StandardPropertyCard;
 import com.mygame.core.GameManager;
 import com.mygame.core.deck.CardManager;
@@ -19,7 +17,6 @@ import org.junit.jupiter.api.DisplayName;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
