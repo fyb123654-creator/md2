@@ -29,6 +29,7 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
 import javafx.scene.Node;
 import javafx.scene.layout.HBox;
@@ -388,15 +389,7 @@ public class GameController {
             bindGameManager(serverManager);
         } else {
             GameManager localManager = new GameManager();
-            List<String> names = new ArrayList<>();
-            for (int i = 1; i <= playerCount; i++) {
-                if (i == 1) {
-                    String localName = AppSettings.getInstance().getPlayerName();
-                    names.add(localName == null || localName.isBlank() ? "Player1" : localName);
-                } else {
-                    names.add("Player" + i);
-                }
-            }
+            List<String> names = promptForOfflinePlayerNames(playerCount);
             localManager.setPlayerCount(playerCount, names);
             for (int i = 0; i < localManager.getPlayersView().size(); i++) {
                 int avatarId = i == 0 ? AppSettings.getInstance().getAvatarId() : i;
@@ -488,6 +481,30 @@ public class GameController {
         String line = (playerId == null || playerId.isBlank() ? "Player" : playerId) + ": " + (message == null ? "" : message);
         chatLines.add(line);
         trimAndRefresh(chatLines, chatArea);
+    }
+
+    private List<String> promptForOfflinePlayerNames(int count) {
+        List<String> names = new ArrayList<>();
+        
+        // Player 1 uses AppSettings
+        String localName = AppSettings.getInstance().getPlayerName();
+        names.add(localName == null || localName.isBlank() ? "Player1" : localName);
+
+        // Prompt for remaining players
+        for (int i = 2; i <= count; i++) {
+            TextInputDialog dialog = new TextInputDialog("Player" + i);
+            dialog.setTitle("Player " + i + " Name");
+            dialog.setHeaderText("Enter name for Player " + i);
+            dialog.setContentText("Name:");
+            Optional<String> result = dialog.showAndWait();
+            
+            String name = result.orElse("Player" + i).trim();
+            if (name.isBlank()) {
+                name = "Player" + i;
+            }
+            names.add(name);
+        }
+        return names;
     }
 
     private int promptForOfflinePlayerCount() {
