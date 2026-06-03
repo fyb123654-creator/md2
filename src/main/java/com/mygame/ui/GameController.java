@@ -1361,6 +1361,7 @@ public class GameController {
             }
         }
 
+
         // 4) Send action to server with rent mode + optional double card id
         if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
             // Wild rent targets a single player
