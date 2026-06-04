@@ -76,15 +76,23 @@ mvnw test
 
 ## Features
 
-- Local multiplayer (2–5 players)
-- Online multiplayer via TCP sockets
-- Full 106-card standard deck
-- JustSayNo counter-chain
-- House/Hotel building system
-- In-game chat + event log
-- Card hover preview with magnification
-- Customizable player names and avatars
-- CSS theming
+- Complete Monopoly Deal rule set – property sets, rent, action cards, wild properties, buildings  
+- JavaFX GUI with FXML layouts – clean and responsive interface  
+- Real-time online multiplayer – full game state synchronization between clients  
+- Host-based room system – host creates room, starts game only when all players are ready  
+- In-game chat system – players can communicate during the match  
+- Event log – tracks all game actions (card plays, rent payments, trades, etc.)  
+- Customizable player profiles – change name and choose avatar for both online and offline modes
+- Card hover preview – magnification effect when hovering over a card  
+- Card flip animation – cards have front and back faces, with flipping effect when drawn/played  
+- Visual draw pile & discard pile – physical representation of both piles with card back images  
+- Property set progress display – shows "current / required" for each color group (e.g., 2/3)  
+- Clear visibility of other players' assets – view opponents' bank cards and placed property sets  
+- System notifications for player actions – real-time prompts for card plays, rent collection, turn changes, etc.  
+- Help system & rule reminders – popup dialogs explaining game rules and how to play  
+- Win detection & game flow – victory when a player collects 3 complete property sets, with automatic elimination for players leaving the game
+- Page-level navigation – robust exit and back navigation supporting hierarchical return across lobbies and game tables
+- Polished background – thematic table texture / UI background for immersive experience
 
 ## Tests
 
@@ -92,9 +100,9 @@ mvnw test
 
 | Test Class | Cases | Coverage |
 |-----------|-------|----------|
-| GameManagerTest | 5 | Init, bank deposit, property placement, turn advance, steal-to-win |
-| CardManagerTest | 1 | Draw pile reshuffle from discard |
-| ActionCardTest | 8 | SlyDeal steal & JustSayNo cancel, DealBreaker set theft, DebtCollector charge, PassGo draw, It'sMyBirthday mass charge |
+| GameManagerTest | 7 | Init, bank deposit, property placement, turn advance, draw rules, steal-to-win, player elimination |
+| CardManagerTest | 1 | Draw pile reshuffle from discard pile |
+| ActionCardTest | 8 | SlyDeal, DealBreaker, DebtCollector, PassGo, It'sMyBirthday, etc. |
 | PlayerManagementTest | 5 | Asset valuation, asset transfer, set completion, rent with buildings |
 | GameStateDataTest | 4 | Card serialization round-trip, player data, game state DTO |
 | PropertyRentRulesTest | 3 | Rent values for brown, dark blue, and railroad sets |
