@@ -45,7 +45,6 @@ public final class PropertyRentRules {
             Map.entry(Color.YELLOW, new RentRule(3, List.of(2, 4, 6))),
             Map.entry(Color.GREEN, new RentRule(3, List.of(2, 4, 7))),
             Map.entry(Color.DARK_BLUE, new RentRule(2, List.of(3, 8))),
-            Map.entry(Color.BLACK, new RentRule(4, List.of(1, 2, 3, 4))),
             Map.entry(Color.RAILROAD, new RentRule(4, List.of(1, 2, 3, 4))),
             Map.entry(Color.UTILITY, new RentRule(2, List.of(1, 2)))
     );

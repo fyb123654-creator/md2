@@ -287,7 +287,7 @@ public class PlayerManagement {
         int propertyCount = zone.properties.size();
         PropertyRentRules.RentRule rule = PropertyRentRules.RULES.get(color);
         if (rule == null) {
-            // Color has no rent rules defined (e.g. BLACK, WILD).
+            // Color has no rent rules defined (e.g. WILD).
             // Return 0 rent so UI rendering doesn't crash.
             return 0;
         }
@@ -464,7 +464,6 @@ public class PlayerManagement {
         map.put(Color.YELLOW, 3);
         map.put(Color.GREEN, 3);
 
-        map.put(Color.BLACK, 4);
         map.put(Color.RAILROAD, 4);
 
         map.put(Color.UTILITY, 2);

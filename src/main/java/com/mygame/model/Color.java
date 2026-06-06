@@ -2,7 +2,6 @@ package com.mygame.model;
 
 public enum Color {
     DARK_BLUE("#1f4e79", "#dce7f2", "Dark Blue"),
-    BLACK("#444444", "#e6e6e6", "Black"),
     BROWN("#8b5a2b", "#f4e4d4", "Brown"),
     LIGHT_BLUE("#6aa9ff", "#e7f1ff", "Light Blue"),
     PINK("#d95fa2", "#fbe3f0", "Pink"),

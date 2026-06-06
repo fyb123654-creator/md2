@@ -2382,7 +2382,6 @@ public class   GameController {
             case RED -> "#d64545";
             case YELLOW -> "#d4ac0d";
             case GREEN -> "#2e8b57";
-            case BLACK -> "#444444";
             case RAILROAD -> "#5d6d7e";
             case UTILITY -> "#7d3c98";
             case WILD -> "#7f8c8d";
@@ -2399,7 +2398,6 @@ public class   GameController {
             case RED -> "#f9dede";
             case YELLOW -> "#f9efc2";
             case GREEN -> "#def3e7";
-            case BLACK -> "#e6e6e6";
             case RAILROAD -> "#e8edf2";
             case UTILITY -> "#eee3f7";
             case WILD -> "#eceff1";
