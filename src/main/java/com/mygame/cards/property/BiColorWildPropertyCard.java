@@ -44,7 +44,7 @@ public final class BiColorWildPropertyCard
                 EnumSet.of(color1, color2);
 
         this.currentActiveColor =
-                activeColor;
+                playableColors.contains(activeColor) ? activeColor : playableColors.iterator().next();
 
         this.rentValues =
                 Map.copyOf(rentValues);

@@ -59,7 +59,7 @@ public final class MultiColorWildRentCard implements ActionCard {
         Color selectedColor = selectedZone.getColor();
         int rentAmount = currentPlayer.getRent(selectedColor);
         if (rentAmount <= 0) {
-            throw new IllegalStateException("No rent available for the selected color");
+            return false;
         }
 
         PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
@@ -67,6 +67,7 @@ public final class MultiColorWildRentCard implements ActionCard {
             return false;
         }
 
+        rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
         gameManager.chargePlayer(currentPlayer, targetPlayer, rentAmount);
         return true;
     }

@@ -33,16 +33,20 @@ import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
 import javafx.scene.Node;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
 import javafx.animation.FadeTransition;
 import javafx.animation.Animation;
 import javafx.animation.Interpolator;
+import javafx.animation.ParallelTransition;
+import javafx.animation.PauseTransition;
 import javafx.animation.TranslateTransition;
 import javafx.util.Duration;
 import javafx.geometry.Bounds;
@@ -59,7 +63,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public class GameController {
+public class   GameController {
 
     // ---------------- UI components ----------------
     @FXML
@@ -74,6 +78,10 @@ public class GameController {
     private VBox opponentAreaBox;
     @FXML
     private StackPane clientAvatarPane;
+    @FXML
+    private StackPane rootStack;
+    @FXML
+    private Pane animationLayer;
     @FXML
     private Label clientInfoLabel;
     @FXML
@@ -1030,25 +1038,66 @@ public class GameController {
         if (cardView == null || drawPilePane == null) {
             return;
         }
+        Card card = cardView.getCard();
+        String cardId = card == null ? null : card.getId();
         cardView.setFaceDown(true);
+        cardView.setOpacity(0);
         Platform.runLater(() -> {
-            if (cardView.getScene() == null) {
-                cardView.setFaceDown(false);
+            CardView resolvedTarget = cardId == null ? cardView : findHandCardViewById(cardId);
+            CardView targetView = resolvedTarget == null ? cardView : resolvedTarget;
+            targetView.setFaceDown(true);
+            targetView.setOpacity(0);
+            if (animationLayer == null || targetView.getScene() == null) {
+                targetView.setOpacity(1);
+                targetView.setFaceDown(false);
                 return;
             }
-            Bounds from = drawPilePane.localToScene(drawPilePane.getBoundsInLocal());
-            Bounds to = cardView.localToScene(cardView.getBoundsInLocal());
-            double dx = from.getMinX() - to.getMinX();
-            double dy = from.getMinY() - to.getMinY();
-            cardView.setTranslateX(dx);
-            cardView.setTranslateY(dy);
-            TranslateTransition tt = new TranslateTransition(Duration.millis(260), cardView);
-            tt.setToX(0);
-            tt.setToY(0);
-            tt.setInterpolator(Interpolator.EASE_OUT);
-            tt.setOnFinished(ev -> cardView.playFlip(false));
-            tt.play();
+
+            Bounds fromScene = drawPilePane.localToScene(drawPilePane.getBoundsInLocal());
+            Bounds toScene = targetView.localToScene(targetView.getBoundsInLocal());
+
+            Point2D from = animationLayer.sceneToLocal(fromScene.getMinX(), fromScene.getMinY());
+            Point2D to = animationLayer.sceneToLocal(toScene.getMinX(), toScene.getMinY());
+
+            CardView ghost = new CardView(card);
+            ghost.setManaged(false);
+            ghost.setMouseTransparent(true);
+            ghost.setFaceDown(true);
+            ghost.relocate(from.getX(), from.getY());
+            animationLayer.getChildren().add(ghost);
+
+            TranslateTransition fly = new TranslateTransition(Duration.millis(520), ghost);
+            fly.setToX(to.getX() - from.getX());
+            fly.setToY(to.getY() - from.getY());
+            fly.setInterpolator(Interpolator.EASE_OUT);
+
+            PauseTransition flipDelay = new PauseTransition(Duration.millis(260));
+            flipDelay.setOnFinished(e -> ghost.playFlip(false));
+
+            ParallelTransition seq = new ParallelTransition(fly, flipDelay);
+            seq.setOnFinished(ev -> {
+                animationLayer.getChildren().remove(ghost);
+                CardView finalView = cardId == null ? targetView : findHandCardViewById(cardId);
+                if (finalView == null) {
+                    finalView = targetView;
+                }
+                finalView.setFaceDown(false);
+                finalView.setOpacity(1);
+            });
+            seq.play();
         });
+    }
+
+    private CardView findHandCardViewById(String cardId) {
+        if (cardId == null || myHandBox == null) {
+            return null;
+        }
+        for (var node : myHandBox.getChildren()) {
+            if (node instanceof CardView cv && cv.getCard() != null && cardId.equals(cv.getCard().getId())) {
+                return cv;
+            }
+        }
+        return null;
     }
 
     // Render bank cards
@@ -1664,55 +1713,42 @@ public class GameController {
     }
 
     private void doPlayRentCard(Card rentCard) {
-        try {
+        // For bi-color rent cards, pre-set the active color before the animation
+        // so that execute() uses the correct color. All other interactions
+        // (target selection, DoubleTheRent, charge) are handled by execute()
+        // inside the standard gameManager.playActionCard() flow.
+        // For wild rent cards, execute() handles everything including color
+        // and target selection.
+        if (rentCard instanceof BiColorRentCard biColorRentCard) {
             PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
             Color selectedColor = promptForRentColor(rentCard, currentPlayer);
             if (selectedColor == null) {
                 return;
             }
-            if (rentCard instanceof BiColorRentCard biColorRentCard) {
-                biColorRentCard.setSelectedColor(selectedColor);
-            }
+            biColorRentCard.setSelectedColor(selectedColor);
 
             int rentAmount = currentPlayer.getRent(selectedColor);
             if (rentAmount <= 0) {
                 showError("No rent available for " + selectedColor.getDisplayName() + ".");
                 return;
             }
-
-            PlayerManagement targetPlayer = null;
-            if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-                targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
-                if (targetPlayer == null) {
-                    return;
-                }
-            }
-
-            rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
-            int finalRentAmount = rentAmount;
-            PlayerManagement finalTargetPlayer = targetPlayer;
-            animateHandCardToDiscard(rentCard, () -> {
-                try {
-                    gameManager.removeFromCurrentPlayerHand(rentCard);
-                    gameManager.getCardManager().playCard(rentCard);
-                    gameManager.recordPlayedCardAfterExternalResolution();
-
-                    if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-                        gameManager.chargePlayer(currentPlayer, finalTargetPlayer, finalRentAmount);
-                    } else {
-                        gameManager.chargeAllOpponents(currentPlayer, finalRentAmount);
-                    }
-
-                    selectedHandCard = null;
-                    updateUI();
-                    broadcastStateIfHost();
-                } catch (Exception e) {
-                    showError("Action failed: " + e.getMessage());
-                }
-            });
-        } catch (Exception e) {
-            showError("Action failed: " + e.getMessage());
         }
+
+        animateHandCardToDiscard(rentCard, () -> {
+            try {
+                // Use the proven playActionCard flow: execute() handles
+                // the rent charge, then the card is removed from hand,
+                // discarded, and play count is recorded automatically.
+                gameManager.playActionCard(rentCard);
+                selectedHandCard = null;
+                updateUI();
+                broadcastStateIfHost();
+            } catch (Exception e) {
+                // Ensure UI is refreshed even if the action fails
+                updateUI();
+                showError("Action failed: " + e.getMessage());
+            }
+        });
     }
 
     private void doDepositToBank(Card card) {
@@ -1863,7 +1899,14 @@ public class GameController {
 
 
     private Color promptForPropertyColor(PropertyCard propertyCard, Set<Color> playableColors) {
+        // Filter to only show colors that have valid rent rules.
+        // This excludes WILD (no set size) and any future invalid colors.
         List<Color> options = new ArrayList<>(playableColors);
+        options.removeIf(c -> !PropertyRentRules.RULES.containsKey(c));
+        if (options.isEmpty()) {
+            showError("No valid property color available for this card.");
+            return null;
+        }
         options.sort(Comparator.comparing(Enum::name));
 
         ChoiceDialog<Color> dialog = new ChoiceDialog<>(options.get(0), options);

@@ -238,7 +238,11 @@ public class GameStateData implements Serializable {
             for (Card realCard : referenceDeck) {
                 if (realCard.getId().equals(this.cardId)) {
                     if (this.color != null) {
-                        Color activeColor = Color.valueOf(this.color);
+                        Color activeColor = null;
+                        try {
+                            activeColor = Color.valueOf(this.color);
+                        } catch (Exception ignored) {
+                        }
                         if (realCard instanceof BiColorWildPropertyCard realBi) {
                             Color[] colors = realBi.getPlayableColors().toArray(new Color[0]);
                             BiColorWildPropertyCard copy = new BiColorWildPropertyCard(
@@ -249,13 +253,17 @@ public class GameStateData implements Serializable {
                             MultiColorWildPropertyCard copy = new MultiColorWildPropertyCard(
                                     realCard.getId(), realCard.getName(), realCard.getValue(),
                                     realMulti.getRentValues());
-                            copy.setCurrentActiveColor(activeColor);
+                            if (activeColor != null && copy.getPlayableColors().contains(activeColor)) {
+                                copy.setCurrentActiveColor(activeColor);
+                            }
                             return copy;
                         } else if (realCard instanceof BiColorRentCard brc) {
                             BiColorRentCard copy = new BiColorRentCard(
                                     realCard.getId(), realCard.getName(), realCard.getValue(),
                                     new HashSet<>(brc.getValidColors()));
-                            copy.setSelectedColor(activeColor);
+                            if (activeColor != null && brc.getValidColors().contains(activeColor)) {
+                                copy.setSelectedColor(activeColor);
+                            }
                             return copy;
                         }
                     }

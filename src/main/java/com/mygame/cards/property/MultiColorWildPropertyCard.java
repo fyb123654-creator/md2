@@ -2,6 +2,7 @@ package com.mygame.cards.property;
 
 import com.mygame.cards.base.CardType;
 import com.mygame.model.Color;
+import com.mygame.rules.PropertyRentRules;
 
 import java.util.Collections;
 import java.util.Map;
@@ -36,7 +37,7 @@ public final class MultiColorWildPropertyCard
         this.value = value;
 
         this.playableColors =
-                Set.of(Color.values());
+                Set.copyOf(PropertyRentRules.RULES.keySet());
 
         this.currentActiveColor =
                 Color.RED;

@@ -85,7 +85,7 @@ public final class BiColorRentCard implements ActionCard {
 
         int rentAmount = currentPlayer.getRent(selectedColor);
         if (rentAmount <= 0) {
-            throw new IllegalStateException("No rent available for the selected color");
+            return false;
         }
 
         rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);

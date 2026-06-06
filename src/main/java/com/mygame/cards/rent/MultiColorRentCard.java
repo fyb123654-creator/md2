@@ -7,6 +7,7 @@ import com.mygame.core.interaction.GameInteractor;
 import com.mygame.model.Color;
 import com.mygame.model.PlayerManagement;
 import com.mygame.model.PropertyZone;
+import com.mygame.rules.PropertyRentRules;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -21,7 +22,7 @@ public final class MultiColorRentCard implements ActionCard {
         this.id = id;
         this.name = name;
         this.value = value;
-        this.validColors = EnumSet.allOf(Color.class);
+        this.validColors = EnumSet.copyOf(PropertyRentRules.RULES.keySet());
     }
 
     @Override
@@ -72,7 +73,7 @@ public final class MultiColorRentCard implements ActionCard {
 
         int rentAmount = currentPlayer.getRent(selectedColor);
         if (rentAmount <= 0) {
-            throw new IllegalStateException("No rent available for the selected color");
+            return false;
         }
 
         PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());

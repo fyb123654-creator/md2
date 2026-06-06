@@ -7,20 +7,23 @@
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <!-- Root ScrollPane improves small-screen usability -->
-<ScrollPane xmlns="http://javafx.com/javafx"
-            xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com.mygame.ui.GameController"
-            fitToWidth="true"
-            fitToHeight="true"
-            hbarPolicy="AS_NEEDED"
-            vbarPolicy="AS_NEEDED"
-            prefHeight="720.0" prefWidth="1280.0">
-    <content>
-        <BorderPane prefHeight="720.0" prefWidth="1280.0" styleClass="game-root">
+<StackPane xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.mygame.ui.GameController"
+           fx:id="rootStack"
+           prefHeight="720.0" prefWidth="1280.0">
+    <ScrollPane fitToWidth="true"
+                fitToHeight="true"
+                hbarPolicy="AS_NEEDED"
+                vbarPolicy="AS_NEEDED"
+                prefHeight="720.0" prefWidth="1280.0">
+        <content>
+            <BorderPane prefHeight="720.0" prefWidth="1280.0" styleClass="game-root">
 
     <top>
         <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED">
@@ -88,6 +91,8 @@
         </ScrollPane>
     </bottom>
 
-        </BorderPane>
-    </content>
-</ScrollPane>
+            </BorderPane>
+        </content>
+    </ScrollPane>
+    <Pane fx:id="animationLayer" mouseTransparent="true"/>
+</StackPane>
