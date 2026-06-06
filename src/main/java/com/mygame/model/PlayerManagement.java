@@ -287,7 +287,9 @@ public class PlayerManagement {
         int propertyCount = zone.properties.size();
         PropertyRentRules.RentRule rule = PropertyRentRules.RULES.get(color);
         if (rule == null) {
-            throw new IllegalArgumentException("No rent rule found for color: " + color);
+            // Color has no rent rules defined (e.g. BLACK, WILD).
+            // Return 0 rent so UI rendering doesn't crash.
+            return 0;
         }
 
         int cappedCount = Math.min(propertyCount, rule.getMaxSetSize());

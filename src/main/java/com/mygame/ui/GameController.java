@@ -59,7 +59,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public class GameController {
+public class   GameController {
 
     // ---------------- UI components ----------------
     @FXML
@@ -1664,55 +1664,42 @@ public class GameController {
     }
 
     private void doPlayRentCard(Card rentCard) {
-        try {
+        // For bi-color rent cards, pre-set the active color before the animation
+        // so that execute() uses the correct color. All other interactions
+        // (target selection, DoubleTheRent, charge) are handled by execute()
+        // inside the standard gameManager.playActionCard() flow.
+        // For wild rent cards, execute() handles everything including color
+        // and target selection.
+        if (rentCard instanceof BiColorRentCard biColorRentCard) {
             PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
             Color selectedColor = promptForRentColor(rentCard, currentPlayer);
             if (selectedColor == null) {
                 return;
             }
-            if (rentCard instanceof BiColorRentCard biColorRentCard) {
-                biColorRentCard.setSelectedColor(selectedColor);
-            }
+            biColorRentCard.setSelectedColor(selectedColor);
 
             int rentAmount = currentPlayer.getRent(selectedColor);
             if (rentAmount <= 0) {
                 showError("No rent available for " + selectedColor.getDisplayName() + ".");
                 return;
             }
-
-            PlayerManagement targetPlayer = null;
-            if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-                targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
-                if (targetPlayer == null) {
-                    return;
-                }
-            }
-
-            rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
-            int finalRentAmount = rentAmount;
-            PlayerManagement finalTargetPlayer = targetPlayer;
-            animateHandCardToDiscard(rentCard, () -> {
-                try {
-                    gameManager.removeFromCurrentPlayerHand(rentCard);
-                    gameManager.getCardManager().playCard(rentCard);
-                    gameManager.recordPlayedCardAfterExternalResolution();
-
-                    if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-                        gameManager.chargePlayer(currentPlayer, finalTargetPlayer, finalRentAmount);
-                    } else {
-                        gameManager.chargeAllOpponents(currentPlayer, finalRentAmount);
-                    }
-
-                    selectedHandCard = null;
-                    updateUI();
-                    broadcastStateIfHost();
-                } catch (Exception e) {
-                    showError("Action failed: " + e.getMessage());
-                }
-            });
-        } catch (Exception e) {
-            showError("Action failed: " + e.getMessage());
         }
+
+        animateHandCardToDiscard(rentCard, () -> {
+            try {
+                // Use the proven playActionCard flow: execute() handles
+                // the rent charge, then the card is removed from hand,
+                // discarded, and play count is recorded automatically.
+                gameManager.playActionCard(rentCard);
+                selectedHandCard = null;
+                updateUI();
+                broadcastStateIfHost();
+            } catch (Exception e) {
+                // Ensure UI is refreshed even if the action fails
+                updateUI();
+                showError("Action failed: " + e.getMessage());
+            }
+        });
     }
 
     private void doDepositToBank(Card card) {
@@ -1863,7 +1850,14 @@ public class GameController {
 
 
     private Color promptForPropertyColor(PropertyCard propertyCard, Set<Color> playableColors) {
+        // Filter to only show colors that have valid rent rules.
+        // This excludes WILD (no set size) and any future invalid colors.
         List<Color> options = new ArrayList<>(playableColors);
+        options.removeIf(c -> !PropertyRentRules.RULES.containsKey(c));
+        if (options.isEmpty()) {
+            showError("No valid property color available for this card.");
+            return null;
+        }
         options.sort(Comparator.comparing(Enum::name));
 
         ChoiceDialog<Color> dialog = new ChoiceDialog<>(options.get(0), options);

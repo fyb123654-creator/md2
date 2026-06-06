@@ -1010,6 +1010,10 @@ public class GameServer {
                 send(NetworkProtocol.error("This property card cannot be used for " + placeSelectedColor.getDisplayName()));
                 return;
             }
+            if (!PropertyRentRules.RULES.containsKey(placeSelectedColor)) {
+                send(NetworkProtocol.error("This color is not a valid property zone: " + placeSelectedColor.getDisplayName()));
+                return;
+            }
             gameManager.placePropertyCard(pc, currentPlayer, placeSelectedColor);
             broadcastGameState();
         }

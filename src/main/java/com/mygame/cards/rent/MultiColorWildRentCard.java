@@ -67,6 +67,7 @@ public final class MultiColorWildRentCard implements ActionCard {
             return false;
         }
 
+        rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
         gameManager.chargePlayer(currentPlayer, targetPlayer, rentAmount);
         return true;
     }
