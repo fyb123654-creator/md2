@@ -10,9 +10,15 @@ import javafx.application.Platform;
 import javafx.animation.Animation;
 import javafx.animation.ScaleTransition;
 import javafx.fxml.FXML;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Rectangle;
 import java.util.ArrayList;
 import java.util.List;
 import javafx.stage.Stage;
@@ -27,6 +33,7 @@ import java.util.List;
  */
 public class NetworkGameController {
 
+    @FXML private StackPane lobbyRoot;
     @FXML private VBox mainPanel;
     @FXML private TextField serverAddressField;
     @FXML private TextField portField;
@@ -37,6 +44,7 @@ public class NetworkGameController {
     @FXML private Button playerCount5Button;
     @FXML private Button hostButton;
     @FXML private Button joinButton;
+    @FXML private Button backStepButton;
     @FXML private Button backToMenuButton;
     @FXML private Button readyButton;
     @FXML private Button startButton;
@@ -47,6 +55,9 @@ public class NetworkGameController {
     @FXML private Label turnInfoLabel;
     @FXML private VBox playerInfoBox;
     @FXML private HBox playerListBox;
+    @FXML private VBox lobbyInfoPane;
+    @FXML private StackPane lobbyPanelPane;
+    @FXML private StackPane lobbySideArtPane;
 
     private GameServer gameServer;
     private GameClient gameClient;
@@ -84,11 +95,142 @@ public class NetworkGameController {
         if (hintLabel != null) {
             hintLabel.setText("Click Create Game to choose the room size, or Join Game to enter an existing room.");
         }
+        applyExplicitLobbyImages();
+        installButtonGraphics();
 
+    }
+
+    private void installButtonGraphics() {
+        installButtonGraphic(backStepButton);
+        installButtonGraphic(backToMenuButton);
+        installButtonGraphic(hostButton);
+        installButtonGraphic(joinButton);
+        installButtonGraphic(readyButton);
+        installButtonGraphic(startButton);
+        installButtonGraphic(playerCount2Button);
+        installButtonGraphic(playerCount3Button);
+        installButtonGraphic(playerCount4Button);
+        installButtonGraphic(playerCount5Button);
+        installButtonGraphic(endTurnButton);
+    }
+
+    private void installButtonGraphic(Button button) {
+        if (button == null) {
+            return;
+        }
+        button.setGraphic(null);
+        button.setContentDisplay(ContentDisplay.TEXT_ONLY);
+        button.setPickOnBounds(true);
+        if (!button.getStyleClass().contains("image-backed-button")) {
+            button.getStyleClass().add("image-backed-button");
+        }
+    }
+
+    private void applyExplicitLobbyImages() {
+        applyBackgroundImage(lobbyRoot, "/images/background.png", "#f6f7fb");
+        applyBackgroundImage(lobbyInfoPane, "/images/lobby/lobby-hero.png", "rgba(255,255,255,0.10)");
+        applyBackgroundImage(lobbyPanelPane, "/images/lobby/lobby-panel.png", "rgba(255,255,255,0.10)");
+        applyContainedBackgroundImage(lobbySideArtPane, "/images/lobby/lobby-side-art.png", "rgba(255,255,255,0.08)");
+        Platform.runLater(() -> {
+            applyRoundedClip(lobbyInfoPane, 28);
+            applyRoundedClip(lobbyPanelPane, 18);
+            applyRoundedClip(lobbySideArtPane, 18);
+            applyButtonClips();
+        });
+    }
+
+    private void applyBackgroundImage(Region node, String resourcePath, String fallbackColor) {
+        if (node == null) {
+            return;
+        }
+        StringBuilder style = new StringBuilder();
+        if (fallbackColor != null && !fallbackColor.isBlank()) {
+            style.append("-fx-background-color: ").append(fallbackColor).append(";");
+        }
+        try {
+            var url = getClass().getResource(resourcePath);
+            if (url != null) {
+                style.append("-fx-background-image: url('").append(url.toExternalForm()).append("');")
+                        .append("-fx-background-position: center center;")
+                        .append("-fx-background-repeat: no-repeat;")
+                        .append("-fx-background-size: cover;");
+            }
+        } catch (Exception ignored) {
+        }
+        if (!style.isEmpty()) {
+            node.setStyle(style.toString());
+        }
+    }
+
+    private void applyRoundedClip(Region node, double arc) {
+        if (node == null) {
+            return;
+        }
+        Rectangle clip = new Rectangle();
+        clip.setArcWidth(arc);
+        clip.setArcHeight(arc);
+        clip.widthProperty().bind(node.widthProperty());
+        clip.heightProperty().bind(node.heightProperty());
+        node.setClip(clip);
+    }
+
+    private void applyContainedBackgroundImage(Region node, String resourcePath, String fallbackColor) {
+        if (node == null) {
+            return;
+        }
+        StringBuilder style = new StringBuilder();
+        if (fallbackColor != null && !fallbackColor.isBlank()) {
+            style.append("-fx-background-color: ").append(fallbackColor).append(";");
+        }
+        try {
+            var url = getClass().getResource(resourcePath);
+            if (url != null) {
+                style.append("-fx-background-image: url('").append(url.toExternalForm()).append("');")
+                        .append("-fx-background-position: center center;")
+                        .append("-fx-background-repeat: no-repeat;")
+                        .append("-fx-background-size: contain;");
+            }
+        } catch (Exception ignored) {
+        }
+        if (!style.isEmpty()) {
+            node.setStyle(style.toString());
+        }
+    }
+
+    private void applyButtonClips() {
+        applyButtonClip(backStepButton, 18);
+        applyButtonClip(backToMenuButton, 18);
+        applyButtonClip(hostButton, 18);
+        applyButtonClip(joinButton, 18);
+        applyButtonClip(readyButton, 18);
+        applyButtonClip(startButton, 18);
+        applyButtonClip(playerCount2Button, 18);
+        applyButtonClip(playerCount3Button, 18);
+        applyButtonClip(playerCount4Button, 18);
+        applyButtonClip(playerCount5Button, 18);
+        applyButtonClip(endTurnButton, 18);
+    }
+
+    private void applyButtonClip(Button button, double arc) {
+        if (button == null) {
+            return;
+        }
+        applyRoundedClip(button, arc);
     }
 
     @FXML
     private void onBackToMenuClicked() {
+        cleanup();
+        gameServer = null;
+        gameClient = null;
+        isHost = false;
+        if (gameApp != null) {
+            gameApp.showMainMenu();
+        }
+    }
+
+    @FXML
+    private void onBackStepClicked() {
         if (gameServer != null) {
             cleanup();
             gameServer = null;
@@ -106,9 +248,6 @@ public class NetworkGameController {
         if (choosingHostPlayerCount) {
             resetToInitialState();
             return;
-        }
-        if (gameApp != null) {
-            gameApp.showMainMenu();
         }
     }
 
@@ -134,6 +273,12 @@ public class NetworkGameController {
         if (statusLabel != null) {
             statusLabel.setText("Ready to connect...");
         }
+        if (backToMenuButton != null) {
+            backToMenuButton.setText("Return to Menu");
+        }
+        if (backStepButton != null) {
+            backStepButton.setDisable(true);
+        }
     }
 
     private void resetToChoosePlayerCountState() {
@@ -157,6 +302,9 @@ public class NetworkGameController {
         }
         if (statusLabel != null) {
             statusLabel.setText("Choose the player count for this room.");
+        }
+        if (backStepButton != null) {
+            backStepButton.setDisable(false);
         }
     }
 
@@ -194,10 +342,18 @@ public class NetworkGameController {
 
     private void setPlayerCountButtonStyle(Button button, boolean selected) {
         if (button == null) return;
+        if (!button.getStyleClass().contains("image-backed-button")) {
+            button.getStyleClass().add("image-backed-button");
+        }
+        if (!button.getStyleClass().contains("player-count-button")) {
+            button.getStyleClass().add("player-count-button");
+        }
         if (selected) {
-            button.setStyle("-fx-padding: 8 16; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #3b82f6; -fx-text-fill: white; -fx-border-color: #1d4ed8; -fx-border-radius: 8; -fx-background-radius: 8;");
+            if (!button.getStyleClass().contains("player-count-selected")) {
+                button.getStyleClass().add("player-count-selected");
+            }
         } else {
-            button.setStyle("-fx-padding: 8 16; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #ffffff; -fx-text-fill: #2f4f6f; -fx-border-color: #cbd5e1; -fx-border-radius: 8; -fx-background-radius: 8;");
+            button.getStyleClass().remove("player-count-selected");
         }
     }
 
@@ -220,6 +376,9 @@ public class NetworkGameController {
             setPlayerCountButtonsDisabled(false);
             if (hostButton != null) {
                 hostButton.setText("Confirm Create Game");
+            }
+            if (backStepButton != null) {
+                backStepButton.setDisable(false);
             }
             if (hintLabel != null) {
                 hintLabel.setText("Choose 2, 3, 4, or 5 players, then click Confirm Create Game.");

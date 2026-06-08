@@ -13,8 +13,13 @@ import javafx.animation.ScaleTransition;
 import javafx.animation.SequentialTransition;
 import javafx.scene.control.Button;
 import javafx.scene.effect.DropShadow;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
@@ -36,8 +41,8 @@ public class CardView extends Button {
 
     private final Card card;
     private final boolean small;
-    private VBox cardContent;
-    private VBox backContent;
+    private StackPane cardContent;
+    private StackPane backContent;
     private Popup hoverPreviewPopup;
     private boolean faceDown;
 
@@ -61,25 +66,30 @@ public class CardView extends Button {
         setMinSize(width, height);
         setMaxSize(width, height);
 
-        cardContent = new VBox();
-
-        cardContent.setPadding(new Insets(8));
-
-        cardContent.setAlignment(javafx.geometry.Pos.CENTER);
-
-        cardContent.setSpacing(4);
+        cardContent = new StackPane();
+        cardContent.getStyleClass().add("card-front-surface");
+        cardContent.setPrefSize(width, height);
+        cardContent.setMinSize(width, height);
+        cardContent.setMaxSize(width, height);
 
         String style = getCardStyle();
 
         cardContent.setStyle(style);
 
+        ImageView frontImageLayer = createCardArtLayer("/images/cards/card-front-overlay.png", width - 14, height - 14, 0.56);
+
+        VBox frontInfoBox = new VBox();
+        frontInfoBox.setPadding(new Insets(8));
+        frontInfoBox.setAlignment(javafx.geometry.Pos.CENTER);
+        frontInfoBox.setSpacing(4);
+
         HBox colorBar = createColorBar();
 
-        cardContent.getChildren().add(colorBar);
+        frontInfoBox.getChildren().add(colorBar);
 
         Label setSizeLabel = createPropertySetSizeLabel();
         if (setSizeLabel != null) {
-            cardContent.getChildren().add(setSizeLabel);
+            frontInfoBox.getChildren().add(setSizeLabel);
         }
 
         Label nameLabel =
@@ -103,7 +113,7 @@ public class CardView extends Button {
                 "-fx-text-fill: #1a1a1a;"
         );
 
-        cardContent.getChildren().add(nameLabel);
+        frontInfoBox.getChildren().add(nameLabel);
 
         Label typeLabel =
                 new Label(getCardTypeIcon());
@@ -120,7 +130,7 @@ public class CardView extends Button {
                 "-fx-text-fill: #4a4a4a;"
         );
 
-        cardContent.getChildren().add(typeLabel);
+        frontInfoBox.getChildren().add(typeLabel);
 
         Label valueLabel =
                 new Label(card.getValue() + "M");
@@ -137,7 +147,10 @@ public class CardView extends Button {
                 "-fx-text-fill: #8b4513;"
         );
 
-        cardContent.getChildren().add(valueLabel);
+        frontInfoBox.getChildren().add(valueLabel);
+
+        cardContent.getChildren().addAll(frontImageLayer, frontInfoBox);
+        installRoundedClip(cardContent, 12);
 
         setGraphic(cardContent);
 
@@ -159,14 +172,19 @@ public class CardView extends Button {
                 "-fx-background-color: transparent; -fx-padding: 0;"
         );
 
-        backContent = new VBox();
-        backContent.setPadding(new Insets(8));
-        backContent.setAlignment(javafx.geometry.Pos.CENTER);
-        backContent.setSpacing(4);
+        backContent = new StackPane();
         backContent.setPrefSize(width, height);
         backContent.setMinSize(width, height);
         backContent.setMaxSize(width, height);
         backContent.getStyleClass().add("card-back");
+        backContent.getStyleClass().add("card-back-surface");
+
+        ImageView backImageLayer = createCardArtLayer("/images/cards/card-back.png", width - 14, height - 14, 0.98);
+
+        VBox backStamp = new VBox();
+        backStamp.setPadding(new Insets(8));
+        backStamp.setAlignment(javafx.geometry.Pos.CENTER);
+        backStamp.setSpacing(4);
         Label backIcon = new Label("🎴");
         backIcon.setFont(Font.font("Arial", FontWeight.BOLD, small ? 18 : 24));
         backIcon.setStyle("-fx-text-fill: #1d4ed8;");
@@ -176,10 +194,50 @@ public class CardView extends Button {
         Label backSub = new Label("DEAL");
         backSub.setFont(Font.font("Arial", FontWeight.BOLD, small ? 10 : 12));
         backSub.setStyle("-fx-text-fill: rgba(30,41,59,0.72); -fx-letter-spacing: 2px;");
-        backContent.getChildren().addAll(backIcon, backTitle, backSub);
+        backStamp.getChildren().addAll(backIcon, backTitle, backSub);
+        backContent.getChildren().addAll(backImageLayer, backStamp);
+        installRoundedClip(backContent, 12);
 
         setFaceDown(false);
         installHoverZoom();
+    }
+
+    private ImageView createCardArtLayer(String resourcePath, double width, double height, double opacity) {
+        ImageView imageView = new ImageView();
+        imageView.setMouseTransparent(true);
+        imageView.setOpacity(opacity);
+        imageView.setPreserveRatio(false);
+        imageView.setSmooth(true);
+        imageView.setFitWidth(width);
+        imageView.setFitHeight(height);
+        Rectangle imageClip = new Rectangle(width, height);
+        imageClip.setArcWidth(24);
+        imageClip.setArcHeight(24);
+        imageView.setClip(imageClip);
+        if (resourcePath == null || resourcePath.isBlank()) {
+            return imageView;
+        }
+        try {
+            var url = getClass().getResource(resourcePath);
+            if (url == null) {
+                return imageView;
+            }
+            imageView.setImage(new Image(url.toExternalForm(), true));
+        } catch (Exception ignored) {
+        }
+        return imageView;
+    }
+
+    private void installRoundedClip(StackPane pane, double arc) {
+        if (pane == null) {
+            return;
+        }
+        Rectangle clip = new Rectangle();
+        clip.setArcWidth(arc * 2);
+        clip.setArcHeight(arc * 2);
+        clip.widthProperty().bind(pane.widthProperty());
+        clip.heightProperty().bind(pane.heightProperty());
+        pane.setClip(clip);
     }
 
     private void installHoverZoom() {

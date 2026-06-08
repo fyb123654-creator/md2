@@ -6,17 +6,23 @@ import com.mygame.ui.GameController;
 import com.mygame.ui.NetworkGameController;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
 
 import java.util.ArrayList;
@@ -25,6 +31,8 @@ import java.util.List;
 public class GameApp extends Application {
 
     private Stage primaryStage;
+    private MediaPlayer bgmPlayer;
+    private double bgmVolume = 0.62;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -33,33 +41,41 @@ public class GameApp extends Application {
     }
 
     public void showMainMenu() {
-        VBox root = new VBox(16);
-        root.getStyleClass().add("menu-root");
-        root.setStyle("-fx-padding: 48; -fx-alignment: center;");
+        StackPane root = new StackPane();
+        root.getStyleClass().addAll("menu-root", "menu-shell");
 
-        Label title = new Label("Monopoly Deal");
-        title.setStyle("-fx-font-size: 44px; -fx-font-weight: 800; -fx-text-fill: white;");
+        HBox shell = new HBox(24);
+        shell.setMaxWidth(1180);
+        shell.setAlignment(Pos.CENTER);
 
         TextField nameField = new TextField(AppSettings.getInstance().getPlayerName());
-        nameField.setMaxWidth(360);
+        nameField.setMaxWidth(Double.MAX_VALUE);
         nameField.setPromptText("Enter your name");
+        nameField.getStyleClass().add("dark-field");
 
-        HBox avatarRow = new HBox(12);
-        avatarRow.setStyle("-fx-alignment: center;");
+        Label title = new Label("Monopoly Deal");
+        title.getStyleClass().add("hero-title");
+        Label subtitle = new Label("A redesigned card table with image slots, layered panels, and a cleaner flow from menu to match.");
+        subtitle.getStyleClass().add("hero-subtitle");
+        subtitle.setWrapText(true);
+
+        TilePane avatarRow = new TilePane();
+        avatarRow.setHgap(12);
+        avatarRow.setVgap(12);
+        avatarRow.setPrefColumns(3);
+        avatarRow.setAlignment(Pos.CENTER_LEFT);
         List<Button> avatarButtons = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             int avatarId = i;
             Button avatarButton = new Button();
-            avatarButton.setPrefSize(44, 44);
-            avatarButton.setMinSize(44, 44);
-            avatarButton.setMaxSize(44, 44);
-            avatarButton.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
-
-            StackPane icon = new StackPane();
-            Circle circle = new Circle(18);
-            circle.setFill(getAvatarColor(avatarId));
-            icon.getChildren().add(circle);
-            avatarButton.setGraphic(icon);
+            avatarButton.setPrefSize(92, 92);
+            avatarButton.setMinSize(92, 92);
+            avatarButton.setMaxSize(92, 92);
+            avatarButton.getStyleClass().add("avatar-select-button");
+            VBox graphic = new VBox(6);
+            graphic.setAlignment(Pos.CENTER);
+            graphic.getChildren().add(AvatarVisuals.createAvatarNode(avatarId, "A" + (avatarId + 1), 54));
+            avatarButton.setGraphic(graphic);
             avatarButton.setOnAction(e -> {
                 AppSettings.getInstance().setAvatarId(avatarId);
                 updateAvatarButtonStyles(avatarButtons);
@@ -69,25 +85,22 @@ public class GameApp extends Application {
         }
         updateAvatarButtonStyles(avatarButtons);
 
-        Button singlePlayerBtn = new Button("Single Player");
-        singlePlayerBtn.setStyle("-fx-padding: 15 40; -fx-font-size: 18px; -fx-font-weight: bold; " +
-                "-fx-background-color: linear-gradient(#4CAF50, #45a049); -fx-text-fill: white; " +
-                "-fx-border-radius: 12; -fx-background-radius: 12;");
+        Label avatarLabel = new Label("Avatar Selection");
+        avatarLabel.getStyleClass().add("panel-field-label");
+
+        Button singlePlayerBtn = createMenuActionButton("Play Offline", "success");
         singlePlayerBtn.setOnAction(e -> {
-            AppSettings.getInstance().setPlayerName(nameField.getText());
+            persistPlayerName(nameField);
             startSinglePlayer();
         });
 
-        Button onlineBtn = new Button("Online Multiplayer");
-        onlineBtn.setStyle("-fx-padding: 15 40; -fx-font-size: 18px; -fx-font-weight: bold; " +
-                "-fx-background-color: linear-gradient(#2196F3, #1976D2); -fx-text-fill: white; " +
-                "-fx-border-radius: 12; -fx-background-radius: 12;");
+        Button onlineBtn = createMenuActionButton("Online Multiplayer", "primary");
         onlineBtn.setOnAction(e -> {
-            AppSettings.getInstance().setPlayerName(nameField.getText());
+            persistPlayerName(nameField);
             startOnlineMultiplayer();
         });
 
-        Button helpBtn = new Button("Help");
+        Button helpBtn = createMenuActionButton("Quick Rules", null);
         helpBtn.setOnAction(e -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Help");
@@ -101,13 +114,47 @@ public class GameApp extends Application {
             alert.showAndWait();
         });
 
-        root.getChildren().addAll(title, nameField, avatarRow, singlePlayerBtn, onlineBtn, helpBtn);
+        VBox leftHero = new VBox(18);
+        leftHero.setPadding(new Insets(28));
+        leftHero.setAlignment(Pos.TOP_LEFT);
+        leftHero.getStyleClass().addAll("menu-card", "hero-image-panel");
+        leftHero.setPrefWidth(520);
+        applyPanelBackground(leftHero, "/images/menu/menu-hero.png");
+        VBox offlineRulesCard = createRulesCard(
+                "Offline Rules",
+                "1. Start a local match with 2 to 5 players.",
+                "2. Every turn draws 2 cards and allows up to 3 plays.",
+                "3. End the turn with 7 or fewer cards in hand.",
+                "4. Build 3 complete property sets to win the match."
+        );
+        offlineRulesCard.getStyleClass().add("dark-rules-card");
+        VBox heroShield = new VBox(12, title, subtitle, offlineRulesCard);
+        heroShield.getStyleClass().add("hero-copy-shield");
+        leftHero.getChildren().add(heroShield);
 
-        Scene scene = new Scene(root, 960, 640);
+        VBox rightPanel = new VBox(16);
+        rightPanel.setPadding(new Insets(28));
+        rightPanel.setAlignment(Pos.TOP_LEFT);
+        rightPanel.getStyleClass().add("menu-card");
+        rightPanel.setPrefWidth(440);
+        Label panelTitle = new Label("Player Setup");
+        panelTitle.getStyleClass().add("panel-title");
+        Label panelCopy = new Label("Pick a name, choose an avatar, and move into offline or online play.");
+        panelCopy.getStyleClass().add("panel-copy");
+        panelCopy.setWrapText(true);
+        StackPane rightPanelArt = createPanelAccentSlot("/images/menu/menu-panel-art.png", 372, 150);
+        VBox.setVgrow(nameField, Priority.NEVER);
+        rightPanel.getChildren().addAll(panelTitle, panelCopy, nameField, avatarLabel, avatarRow, singlePlayerBtn, onlineBtn, helpBtn, rightPanelArt);
+
+        shell.getChildren().addAll(leftHero, rightPanel);
+        root.getChildren().add(shell);
+
+        Scene scene = new Scene(root, 1280, 760);
         applyTheme(scene);
         primaryStage.setTitle("Monopoly Deal - Mode Selection");
         primaryStage.setScene(scene);
         primaryStage.show();
+        Platform.runLater(this::ensureBgmPlaying);
     }
 
     private void startSinglePlayer() {
@@ -118,7 +165,7 @@ public class GameApp extends Application {
             controller.setGameApp(this);
             primaryStage.setOnCloseRequest(e -> controller.cleanup());
 
-            Scene scene = new Scene(root, 1280, 720);
+            Scene scene = new Scene(root, 1440, 860);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal");
             primaryStage.setScene(scene);
@@ -139,14 +186,177 @@ public class GameApp extends Application {
         }
     }
 
-    private Color getAvatarColor(int avatarId) {
-        return switch (Math.floorMod(avatarId, 5)) {
-            case 0 -> Color.web("#3b82f6");
-            case 1 -> Color.web("#22c55e");
-            case 2 -> Color.web("#f59e0b");
-            case 3 -> Color.web("#ef4444");
-            default -> Color.web("#a855f7");
-        };
+    public void ensureBgmPlaying() {
+        if (bgmPlayer != null) {
+            bgmPlayer.setMute(false);
+            bgmPlayer.setVolume(bgmVolume);
+            if (bgmPlayer.getStatus() != MediaPlayer.Status.PLAYING) {
+                bgmPlayer.seek(javafx.util.Duration.ZERO);
+                bgmPlayer.play();
+            }
+            return;
+        }
+        try {
+            var url = resolveBgmResource();
+            if (url == null) {
+                System.err.println("BGM resource not found. Tried /audio/bgm.wav, /audio/bgm.mp3, /audio/bgm.m4a");
+                return;
+            }
+            Media media = new Media(url.toExternalForm());
+            media.setOnError(() -> {
+                if (media.getError() != null) {
+                    media.getError().printStackTrace();
+                }
+            });
+            bgmPlayer = new MediaPlayer(media);
+            bgmPlayer.setCycleCount(MediaPlayer.INDEFINITE);
+            bgmPlayer.setOnReady(() -> {
+                bgmPlayer.setMute(false);
+                bgmPlayer.setVolume(bgmVolume);
+                bgmPlayer.seek(javafx.util.Duration.ZERO);
+                bgmPlayer.play();
+            });
+            bgmPlayer.setOnError(() -> {
+                if (bgmPlayer.getError() != null) {
+                    bgmPlayer.getError().printStackTrace();
+                }
+            });
+            bgmPlayer.setAutoPlay(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private java.net.URL resolveBgmResource() {
+        String[] candidates = {"/audio/bgm.wav", "/audio/bgm.mp3", "/audio/bgm.m4a"};
+        for (String candidate : candidates) {
+            var url = getClass().getResource(candidate);
+            if (url != null) {
+                return url;
+            }
+        }
+        return null;
+    }
+
+    public void setBgmVolume(double volume) {
+        bgmVolume = Math.max(0.0, Math.min(1.0, volume));
+        if (bgmPlayer != null) {
+            bgmPlayer.setVolume(bgmVolume);
+        }
+    }
+
+    public double getBgmVolume() {
+        return bgmVolume;
+    }
+
+    private void persistPlayerName(TextField nameField) {
+        String value = nameField == null ? "" : nameField.getText();
+        AppSettings.getInstance().setPlayerName(value == null ? "" : value.trim());
+    }
+
+    private Button createMenuActionButton(String text, String intentStyleClass) {
+        Button button = new Button(text);
+        button.setMaxWidth(Double.MAX_VALUE);
+        button.setMinHeight(56);
+        button.getStyleClass().addAll("button", "image-backed-button");
+        if (intentStyleClass != null && !intentStyleClass.isBlank()) {
+            button.getStyleClass().add(intentStyleClass);
+        }
+        button.setMouseTransparent(false);
+        button.setDisable(false);
+        installButtonGraphic(button);
+        return button;
+    }
+
+    private void installButtonGraphic(Button button) {
+        if (button == null) {
+            return;
+        }
+        button.setGraphic(null);
+        button.setContentDisplay(ContentDisplay.TEXT_ONLY);
+        if (!button.getStyleClass().contains("image-backed-button")) {
+            button.getStyleClass().add("image-backed-button");
+        }
+    }
+
+    private StackPane createImageSlot(String title, String resourcePath, double width, double height) {
+        StackPane slot = new StackPane();
+        slot.getStyleClass().add("image-slot");
+        slot.setPrefSize(width, height);
+        slot.setMinSize(width, height);
+        slot.setMaxWidth(width);
+        String normalizedPath = resourcePath.startsWith("/") ? resourcePath : "/" + resourcePath;
+        var url = getClass().getResource(normalizedPath);
+        if (url != null) {
+            slot.setStyle(
+                    "-fx-background-color: transparent;" +
+                            "-fx-background-image: url('" + url.toExternalForm() + "');" +
+                            "-fx-background-position: center center;" +
+                            "-fx-background-repeat: no-repeat;" +
+                            "-fx-background-size: cover;"
+            );
+        }
+        return slot;
+    }
+
+    private StackPane createPanelAccentSlot(String resourcePath, double width, double height) {
+        StackPane slot = new StackPane();
+        slot.getStyleClass().addAll("image-slot", "panel-accent-slot");
+        slot.setPrefSize(width, height);
+        slot.setMinSize(width, height);
+        slot.setMaxWidth(width);
+        try {
+            String normalizedPath = resourcePath.startsWith("/") ? resourcePath : "/" + resourcePath;
+            var url = getClass().getResource(normalizedPath);
+            if (url != null) {
+                slot.setStyle("-fx-background-color: rgba(255,255,255,0.08);"
+                        + "-fx-background-image: url('" + url.toExternalForm() + "');"
+                        + "-fx-background-position: center center;"
+                        + "-fx-background-repeat: no-repeat;"
+                        + "-fx-background-size: contain;");
+            }
+        } catch (Exception ignored) {
+        }
+        Region shield = new Region();
+        shield.getStyleClass().add("panel-accent-shield");
+        shield.setMouseTransparent(true);
+        slot.getChildren().add(shield);
+        return slot;
+    }
+
+    private VBox createRulesCard(String title, String... rules) {
+        VBox card = new VBox(8);
+        card.getStyleClass().add("rules-card");
+        Label titleLabel = new Label(title);
+        titleLabel.getStyleClass().add("panel-title");
+        card.getChildren().add(titleLabel);
+        if (rules != null) {
+            for (String rule : rules) {
+                Label line = new Label(rule);
+                line.getStyleClass().add("rule-line");
+                line.setWrapText(true);
+                card.getChildren().add(line);
+            }
+        }
+        return card;
+    }
+
+    private void applyPanelBackground(Region node, String resourcePath) {
+        if (node == null || resourcePath == null || resourcePath.isBlank()) {
+            return;
+        }
+        try {
+            var url = getClass().getResource(resourcePath);
+            if (url == null) {
+                return;
+            }
+            node.setStyle("-fx-background-color: rgba(255,255,255,0.10);"
+                    + "-fx-background-image: url('" + url.toExternalForm() + "');"
+                    + "-fx-background-position: center center;"
+                    + "-fx-background-repeat: no-repeat;"
+                    + "-fx-background-size: cover;");
+        } catch (Exception ignored) {
+        }
     }
 
     private void startOnlineMultiplayer() {
@@ -159,14 +369,16 @@ public class GameApp extends Application {
             Parent root = view.getRoot();
             NetworkGameController controller = view.getController();
             controller.setGameApp(this);
+            controller.setPrimaryStage(primaryStage);
             
             primaryStage.setOnCloseRequest(e -> controller.cleanup());
 
-            Scene scene = new Scene(root, 600, 400);
+            Scene scene = new Scene(root, 1220, 760);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal - Online");
             primaryStage.setScene(scene);
             primaryStage.show();
+            Platform.runLater(this::ensureBgmPlaying);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -199,11 +411,12 @@ public class GameApp extends Application {
                 }
             }
 
-            Scene scene = new Scene(root, 1280, 720);
+            Scene scene = new Scene(root, 1440, 860);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal - Online Game");
             primaryStage.setScene(scene);
             primaryStage.show();
+            Platform.runLater(this::ensureBgmPlaying);
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -1,68 +1,92 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
-<?import javafx.scene.control.*?>
-<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
 
-<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.mygame.ui.NetworkGameController" styleClass="lobby-root" style="-fx-padding: 18; -fx-spacing: 15;">
+<StackPane xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.mygame.ui.NetworkGameController"
+           fx:id="lobbyRoot"
+           styleClass="lobby-root lobby-shell">
+    <HBox spacing="24" alignment="CENTER" maxWidth="1180">
+        <VBox fx:id="lobbyInfoPane" spacing="18" prefWidth="430" styleClass="lobby-card hero-image-panel" style="-fx-padding: 28;">
+            <VBox spacing="12" styleClass="hero-copy-shield">
+                <Label text="Online Lobby" styleClass="hero-title"/>
+                <Label text="Create a room, wait for everyone to get ready, and launch the match from a cleaner staging space." styleClass="hero-subtitle" wrapText="true"/>
+                <VBox spacing="8" styleClass="rules-card dark-rules-card">
+                    <Label text="Online Rules" styleClass="panel-title"/>
+                    <Label text="1. The host creates the room and chooses the room size." styleClass="rule-line" wrapText="true"/>
+                    <Label text="2. All connected players should press Ready before the host starts." styleClass="rule-line" wrapText="true"/>
+                    <Label text="3. The host starts only when every seat is filled and ready." styleClass="rule-line" wrapText="true"/>
+                    <Label text="4. If only one active player remains, that player wins automatically." styleClass="rule-line" wrapText="true"/>
+                </VBox>
+            </VBox>
+            <VBox spacing="10" styleClass="info-card" style="-fx-padding: 18;">
+                <Label text="Room Flow" styleClass="panel-title"/>
+                <Label text="1. Choose create or join. 2. Mark ready. 3. The host starts when every seat is filled and ready." styleClass="panel-copy" wrapText="true"/>
+                <HBox spacing="10">
+                    <Button fx:id="backStepButton" text="Back One Step" onAction="#onBackStepClicked" styleClass="button primary image-backed-button"/>
+                    <Button fx:id="backToMenuButton" text="Return to Menu" onAction="#onBackToMenuClicked" styleClass="button danger image-backed-button"/>
+                </HBox>
+            </VBox>
+            <VBox fx:id="playerInfoBox" spacing="10" visible="false" managed="true" styleClass="info-card" style="-fx-padding: 18;">
+                <Label text="Players" styleClass="panel-title"/>
+                <HBox fx:id="playerListBox" spacing="10"/>
+            </VBox>
+        </VBox>
 
-    <Label text="Monopoly Deal - Online Mode" style="-fx-font-size: 26px; -fx-font-weight: 800; -fx-text-fill: white;"/>
+        <VBox fx:id="mainPanel" spacing="16" prefWidth="620" styleClass="lobby-card" style="-fx-padding: 28;">
+            <Label text="Connection" styleClass="panel-title"/>
+            <Label text="The host sets room size. Guests only need the host address and port." styleClass="panel-copy" wrapText="true"/>
 
-    <HBox alignment="CENTER_LEFT">
-        <Button fx:id="backToMenuButton" text="Back" onAction="#onBackToMenuClicked"
-                style="-fx-padding: 10 20; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: linear-gradient(#fb7185, #f43f5e); -fx-text-fill: white; -fx-border-radius: 10; -fx-background-radius: 10; -fx-border-color: #e11d48;"/>
-    </HBox>
-
-    <VBox fx:id="mainPanel" spacing="12" styleClass="overlay" style="-fx-padding: 16;">
-        <HBox spacing="10" alignment="CENTER_LEFT">
-            <Label text="Server Address:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
-            <TextField fx:id="serverAddressField" prefWidth="200" promptText="Enter server IP"/>
-        </HBox>
-
-        <HBox spacing="10" alignment="CENTER_LEFT">
-            <Label text="Port:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
-            <TextField fx:id="portField" prefWidth="100" promptText="12345"/>
-        </HBox>
-
-        <HBox spacing="10" alignment="CENTER_LEFT">
-            <Label text="Player Count:" style="-fx-font-size: 14px; -fx-min-width: 120px;"/>
-            <HBox fx:id="playerCountButtonBox" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
-                <Button fx:id="playerCount2Button" text="2 Players" onAction="#onPlayerCount2Clicked"/>
-                <Button fx:id="playerCount3Button" text="3 Players" onAction="#onPlayerCount3Clicked"/>
-                <Button fx:id="playerCount4Button" text="4 Players" onAction="#onPlayerCount4Clicked"/>
-                <Button fx:id="playerCount5Button" text="5 Players" onAction="#onPlayerCount5Clicked"/>
+            <HBox spacing="12" alignment="CENTER_LEFT">
+                <VBox spacing="6" HBox.hgrow="ALWAYS">
+                    <Label text="Server Address" styleClass="panel-field-label"/>
+                    <TextField fx:id="serverAddressField" promptText="Enter server IP" styleClass="dark-field"/>
+                </VBox>
+                <VBox spacing="6" prefWidth="140">
+                    <Label text="Port" styleClass="panel-field-label"/>
+                    <TextField fx:id="portField" promptText="12345" styleClass="dark-field"/>
+                </VBox>
             </HBox>
-        </HBox>
 
-        <HBox spacing="15" alignment="CENTER">
-            <Button fx:id="hostButton" text="Create Game" onAction="#onHostButtonClicked"
-                    style="-fx-padding: 12 30; -fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: linear-gradient(#4CAF50, #45a049); -fx-text-fill: white; -fx-border-radius: 10; -fx-background-radius: 10;"/>
-            <Button fx:id="joinButton" text="Join Game" onAction="#onJoinButtonClicked"
-                    style="-fx-padding: 12 30; -fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: linear-gradient(#2196F3, #1976D2); -fx-text-fill: white; -fx-border-radius: 10; -fx-background-radius: 10;"/>
-        </HBox>
+            <VBox spacing="8">
+                <Label text="Room Size" styleClass="panel-field-label"/>
+                <HBox fx:id="playerCountButtonBox" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
+                    <Button fx:id="playerCount2Button" text="2 Players" onAction="#onPlayerCount2Clicked" styleClass="button"/>
+                    <Button fx:id="playerCount3Button" text="3 Players" onAction="#onPlayerCount3Clicked" styleClass="button"/>
+                    <Button fx:id="playerCount4Button" text="4 Players" onAction="#onPlayerCount4Clicked" styleClass="button"/>
+                    <Button fx:id="playerCount5Button" text="5 Players" onAction="#onPlayerCount5Clicked" styleClass="button"/>
+                </HBox>
+            </VBox>
 
-        <HBox spacing="15" alignment="CENTER">
-            <Button fx:id="readyButton" text="Ready" onAction="#onReadyClicked" styleClass="button primary"/>
-            <Button fx:id="startButton" text="Start (Host)" onAction="#onStartClicked" disable="true" styleClass="button success"/>
-        </HBox>
+            <HBox spacing="14" alignment="CENTER_LEFT">
+                <Button fx:id="hostButton" text="Create Game" onAction="#onHostButtonClicked" styleClass="button success image-backed-button"/>
+                <Button fx:id="joinButton" text="Join Game" onAction="#onJoinButtonClicked" styleClass="button primary image-backed-button"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Button fx:id="readyButton" text="Ready" onAction="#onReadyClicked" styleClass="button primary image-backed-button"/>
+                <Button fx:id="startButton" text="Start (Host)" onAction="#onStartClicked" disable="true" styleClass="button success image-backed-button"/>
+            </HBox>
 
-        <Label fx:id="hintLabel" text="Step 1: Click Ready. Step 2: Host clicks Start when everyone is Ready."
-               styleClass="hint important"/>
+            <StackPane fx:id="lobbyPanelPane" styleClass="image-slot lobby-panel-slot" prefHeight="118"/>
 
-        <Label fx:id="statusLabel" text="Ready to connect..." style="-fx-font-size: 14px; -fx-text-fill: #666;"/>
-    </VBox>
+            <Label fx:id="hintLabel" text="Step 1: Click Ready. Step 2: Host clicks Start when everyone is Ready." styleClass="hint important"/>
+            <Label fx:id="statusLabel" text="Ready to connect..." styleClass="panel-copy"/>
+            <StackPane fx:id="lobbySideArtPane" styleClass="image-slot panel-accent-slot" prefHeight="150">
+                <Region styleClass="panel-accent-shield"/>
+            </StackPane>
 
-    <HBox fx:id="gameArea" spacing="15" visible="false">
-        <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
-
-        <Label text="Game board will appear here" style="-fx-text-fill: #999;"/>
-
-        <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked"
-                style="-fx-padding: 10 25; -fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #f44336; -fx-text-fill: white; -fx-border-radius: 8; -fx-background-radius: 8;"/>
+            <HBox fx:id="gameArea" spacing="15" visible="false" managed="false">
+                <Label fx:id="turnInfoLabel" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+                <Label text="Game board will appear here" style="-fx-text-fill: #999;"/>
+                <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" styleClass="button danger"/>
+            </HBox>
+        </VBox>
     </HBox>
-
-    <VBox fx:id="playerInfoBox" spacing="10" visible="false">
-        <Label text="Players:" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
-        <HBox fx:id="playerListBox" spacing="10"/>
-    </VBox>
-</VBox>
+</StackPane>

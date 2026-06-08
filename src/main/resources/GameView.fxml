@@ -1,98 +1,156 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<!-- Root ScrollPane improves small-screen usability -->
 <StackPane xmlns="http://javafx.com/javafx"
            xmlns:fx="http://javafx.com/fxml/1"
            fx:controller="com.mygame.ui.GameController"
            fx:id="rootStack"
-           prefHeight="720.0" prefWidth="1280.0">
-    <ScrollPane fitToWidth="true"
-                fitToHeight="true"
-                hbarPolicy="AS_NEEDED"
-                vbarPolicy="AS_NEEDED"
-                prefHeight="720.0" prefWidth="1280.0">
-        <content>
-            <BorderPane prefHeight="720.0" prefWidth="1280.0" styleClass="game-root">
-
-    <top>
-        <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="AS_NEEDED">
-            <content>
-                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: rgba(255,255,255,0.78); -fx-background-radius: 14;">
-                    <Label text="Other Players" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
-                    <VBox fx:id="opponentAreaBox" spacing="12"/>
-                </VBox>
-            </content>
-        </ScrollPane>
-    </top>
-
-    <center>
-        <VBox alignment="CENTER" spacing="18" style="-fx-padding: 18px; -fx-background-color: rgba(255,255,255,0.62); -fx-background-radius: 14;">
-            <HBox alignment="CENTER" spacing="12">
+           prefHeight="820.0" prefWidth="1440.0">
+    <BorderPane fx:id="gameRootPane" prefHeight="820.0" prefWidth="1440.0" styleClass="game-root">
+        <top>
+            <HBox alignment="CENTER_LEFT" spacing="14" styleClass="top-strip">
                 <StackPane fx:id="clientAvatarPane"/>
-                <Label fx:id="clientInfoLabel" text="Player" style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #2f4f6f;"/>
+                <VBox spacing="4">
+                    <Label fx:id="clientInfoLabel" text="Player" styleClass="table-title"/>
+                    <Label fx:id="turnInfoLabel" text="Game not started" styleClass="table-subtitle"/>
+                </VBox>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label fx:id="hintLabel" text="" styleClass="hint important"/>
             </HBox>
-            <HBox alignment="CENTER" spacing="12">
-                <Label fx:id="turnInfoLabel" text="Game not started" style="-fx-font-size: 24px;"/>
-                <Button fx:id="helpButton" text="Help" onAction="#onHelpClicked" styleClass="primary"/>
-                <Button fx:id="navBackButton" text="Exit to Lobby" onAction="#onNavigateBackClicked" style="-fx-font-size: 18px; -fx-padding: 10 22; -fx-background-color: linear-gradient(#fb7185, #f43f5e); -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #e11d48;"/>
-            </HBox>
-            <Label fx:id="hintLabel" text="" styleClass="hint important"/>
-            <HBox alignment="CENTER" spacing="26">
-                <StackPane fx:id="drawPilePane" styleClass="pile">
-                    <Label fx:id="drawPileCountLabel" text="0" styleClass="pile-count"/>
-                </StackPane>
-                <StackPane fx:id="discardPilePane" styleClass="pile">
-                    <Label fx:id="discardPileCountLabel" text="0" styleClass="pile-count"/>
-                </StackPane>
-            </HBox>
-            <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" style="-fx-font-size: 18px; -fx-padding: 10 22; -fx-background-color: linear-gradient(#ffcd72, #f0a93b); -fx-text-fill: #2b2b2b; -fx-font-weight: bold; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #c9851f;"/>
-            <TextArea fx:id="logArea" editable="false" wrapText="true" prefRowCount="6" prefWidth="860.0"/>
-            <Label text="Chat" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
-            <TextArea fx:id="chatArea" editable="false" wrapText="true" prefRowCount="6" prefWidth="860.0"/>
-            <HBox spacing="10" alignment="CENTER">
-                <TextField fx:id="chatInput" promptText="Type a message..." HBox.hgrow="ALWAYS"/>
-                <Button fx:id="sendChatButton" text="Send" onAction="#onSendChatClicked" styleClass="primary"/>
-            </HBox>
-            <HBox fx:id="handActionBox" alignment="CENTER_LEFT" spacing="14" style="-fx-padding: 0 0 0 0;"/>
-        </VBox>
-    </center>
+        </top>
 
-    <bottom>
-        <ScrollPane fitToWidth="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER">
-            <content>
-                <VBox spacing="14" style="-fx-padding: 14px; -fx-background-color: rgba(255,255,255,0.78); -fx-background-radius: 14;">
-                    <VBox spacing="8">
-                        <Label text="My Hand" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
-                        <HBox fx:id="myHandBox" alignment="CENTER_LEFT" spacing="10"/>
-                    </VBox>
-
-                    <VBox spacing="8">
-                        <Label text="My Bank Area" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
-                        <HBox fx:id="myBankBox" alignment="CENTER_LEFT" spacing="10"/>
-                    </VBox>
-
-                    <VBox spacing="8">
-                        <Label text="My Property Area" style="-fx-font-size: 18px; -fx-font-weight: bold;"/>
-                        <HBox fx:id="myPropertyBox" alignment="CENTER_LEFT" spacing="10"/>
+        <center>
+            <VBox spacing="4" style="-fx-padding: 6 6 2 6;">
+                <VBox spacing="8" alignment="CENTER" styleClass="overlay played-zone top-zone full-width-opponent-zone">
+                    <Label text="Opponent Zones" styleClass="section-title"/>
+                    <ScrollPane fx:id="opponentScrollPane" fitToWidth="true" fitToHeight="true" pannable="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" prefViewportHeight="242" styleClass="zone-scroll opponent-scroll">
+                        <content>
+                            <HBox fx:id="opponentAreaBox" alignment="CENTER" spacing="10" styleClass="opponent-fan-row"/>
+                        </content>
+                    </ScrollPane>
+                </VBox>
+                <HBox spacing="12">
+                <VBox prefWidth="326" spacing="14" style="-fx-padding: 112 0 0 0;">
+                    <VBox fx:id="feedPanel" spacing="12" styleClass="overlay side-panel feed-panel">
+                        <Label text="Match Feed" styleClass="section-title"/>
+                        <TextArea fx:id="logArea" editable="false" wrapText="true" prefRowCount="7"/>
+                        <Separator/>
+                        <Label text="Team Chat" styleClass="section-title"/>
+                        <TextArea fx:id="chatArea" editable="false" wrapText="true" prefRowCount="7"/>
+                        <HBox spacing="8" alignment="CENTER">
+                            <TextField fx:id="chatInput" promptText="Type a message..." HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="sendChatButton" text="Send" styleClass="button primary" onAction="#onSendChatClicked"/>
+                        </HBox>
                     </VBox>
                 </VBox>
+
+                <StackPane fx:id="tableBoardPane" HBox.hgrow="ALWAYS" styleClass="table-board">
+                    <VBox spacing="2" alignment="TOP_CENTER" maxWidth="1020">
+                        <VBox spacing="4" alignment="CENTER" styleClass="table-center-stack">
+                            <StackPane fx:id="tableCenterPane" styleClass="table-center">
+                                <VBox.margin>
+                                    <Insets top="18"/>
+                                </VBox.margin>
+                                <VBox spacing="12" alignment="CENTER">
+                                    <Label fx:id="actingPlayerLabel" text="Waiting for action..." styleClass="table-subtitle"/>
+                                    <HBox alignment="CENTER" spacing="16">
+                                        <StackPane fx:id="drawPilePane" styleClass="pile">
+                                            <Label fx:id="drawPileCountLabel" text="0" styleClass="pile-count"/>
+                                        </StackPane>
+                                        <VBox spacing="10" alignment="CENTER" styleClass="current-turn-table">
+                                            <Label text="Current Table" styleClass="slot-title"/>
+                                            <HBox spacing="10" alignment="CENTER">
+                                                <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card">
+                                                    <Label text="Bank" styleClass="zone-label"/>
+                                                    <HBox fx:id="tableCurrentBankBox" alignment="CENTER" spacing="8"/>
+                                                </VBox>
+                                                <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card">
+                                                    <Label text="Property" styleClass="zone-label"/>
+                                                    <HBox fx:id="tableCurrentPropertyBox" alignment="CENTER" spacing="8"/>
+                                                </VBox>
+                                                <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card action-zone-card">
+                                                    <Label text="Action" styleClass="zone-label"/>
+                                                    <StackPane fx:id="tablePlayedCardPane" styleClass="table-play-slot">
+                                                        <Label text="Waiting" styleClass="slot-title"/>
+                                                    </StackPane>
+                                                </VBox>
+                                            </HBox>
+                                        </VBox>
+                                        <StackPane fx:id="discardPilePane" styleClass="pile">
+                                            <Label fx:id="discardPileCountLabel" text="0" styleClass="pile-count"/>
+                                        </StackPane>
+                                    </HBox>
+                                </VBox>
+                            </StackPane>
+                            <HBox fx:id="handActionBox" alignment="CENTER" spacing="16" minHeight="70" styleClass="hand-action-box"/>
+                        </VBox>
+
+                        <VBox spacing="2" alignment="CENTER" styleClass="overlay played-zone bottom-zone">
+                            <Label text="My Table" styleClass="section-title"/>
+                            <HBox spacing="14" alignment="CENTER">
+                                <VBox spacing="8" styleClass="zone-card">
+                                    <Label text="My Bank" styleClass="zone-label"/>
+                                    <ScrollPane fx:id="myBankScrollPane" fitToWidth="true" pannable="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" prefViewportHeight="118" prefViewportWidth="330" styleClass="zone-scroll">
+                                        <content>
+                                            <HBox fx:id="myBankBox" alignment="CENTER_LEFT" spacing="14"/>
+                                        </content>
+                                    </ScrollPane>
+                                </VBox>
+                                <VBox spacing="8" styleClass="zone-card">
+                                    <Label text="My Properties" styleClass="zone-label"/>
+                                    <ScrollPane fx:id="myPropertyScrollPane" fitToWidth="true" pannable="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" prefViewportHeight="118" prefViewportWidth="470" styleClass="zone-scroll">
+                                        <content>
+                                            <HBox fx:id="myPropertyBox" alignment="CENTER_LEFT" spacing="14"/>
+                                        </content>
+                                    </ScrollPane>
+                                </VBox>
+                            </HBox>
+                        </VBox>
+                    </VBox>
+                </StackPane>
+
+                <VBox prefWidth="302" spacing="12" style="-fx-padding: 112 0 0 0;">
+                    <VBox fx:id="actionPanel" spacing="14" styleClass="overlay side-panel action-panel">
+                        <Label text="Actions" styleClass="section-title"/>
+                        <Label fx:id="timerLabel" text="180s" styleClass="timer-chip"/>
+                        <Label text="BGM Volume" styleClass="zone-label"/>
+                        <Slider fx:id="bgmVolumeSlider" min="0" max="100" value="62"/>
+                        <Button fx:id="navBackButton" text="Return to Previous Step" onAction="#onNavigateBackClicked" styleClass="button primary side-action"/>
+                        <Button fx:id="mainMenuButton" text="Return to Main Menu" onAction="#onReturnMainMenuClicked" styleClass="button danger side-action"/>
+                        <Button fx:id="helpButton" text="Game Rules" onAction="#onHelpClicked" styleClass="button primary side-action"/>
+                        <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" styleClass="button success side-action primary-side-action"/>
+                        <Button fx:id="discardModeButton" text="Discard" onAction="#onDiscardModeClicked" styleClass="button side-action"/>
+                        <Label fx:id="loadingLabel" text="Waiting for player action..." wrapText="true" styleClass="loading-label"/>
+                    </VBox>
+                </VBox>
+                </HBox>
+            </VBox>
+        </center>
+    </BorderPane>
+    <VBox fx:id="floatingHandSurface" spacing="4" styleClass="floating-hand-surface" StackPane.alignment="BOTTOM_CENTER" pickOnBounds="false">
+        <HBox alignment="CENTER" spacing="10" styleClass="hand-drawer-handle" pickOnBounds="false">
+            <Label text="My Hand" styleClass="section-title"/>
+            <Button fx:id="handDrawerToggleButton" text="▼" onAction="#onToggleHandDrawerClicked" styleClass="button drawer-arrow-button image-backed-button"/>
+        </HBox>
+        <ScrollPane fx:id="handDrawerScrollPane" fitToWidth="true" pannable="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" styleClass="hand-drawer">
+            <content>
+                <HBox fx:id="myHandBox" alignment="CENTER_LEFT" spacing="16" style="-fx-padding: 16 18 18 18;"/>
             </content>
         </ScrollPane>
-    </bottom>
-
-            </BorderPane>
-        </content>
-    </ScrollPane>
+    </VBox>
     <Pane fx:id="animationLayer" mouseTransparent="true"/>
 </StackPane>

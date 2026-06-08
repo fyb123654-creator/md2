@@ -60,6 +60,9 @@ public final class DealBreakerCard implements ActionCard {
         if (targetPlayer == null) {
             return false;
         }
+        if (gameManager.tryCancelWithJustSayNo(targetPlayer, currentPlayer, getName())) {
+            return false;
+        }
 
         PropertyZone selectedZone = interactor.choicePropertyZone(targetPlayer);
         if (selectedZone == null) {

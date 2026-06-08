@@ -4,105 +4,118 @@
 
 ## Overview
 
-A digital implementation of the Monopoly Deal card game built with Java and JavaFX. Supports local multiplayer (2–5 players) and online multiplayer via TCP socket networking. Players collect property sets, charge rent, and use action cards — first to 3 complete sets wins.
+A digital Monopoly Deal project built with Java and JavaFX. The game currently supports:
 
-GitHub: https://github.com/fyb123654-creator/md2
+- Local multiplayer for 2 to 5 players
+- Online multiplayer through a host-client TCP room flow
+- Turn timer, automatic timeout handling, event log, in-game chat, and image-based UI customization
+
+The win condition is to complete 3 full property sets before the other players.
 
 ## Tech Stack
 
-- Java 25 + JavaFX 25 (FXML + CSS)
-- Maven (build)
-- JUnit 5 (testing)
-- Custom TCP protocol (online mode)
+- Java 25
+- JavaFX 25 (`controls`, `fxml`, `graphics`, `media`)
+- Maven
+- JUnit 5
+- Custom TCP networking
 
 ## Project Structure
 
-```
-md2/
+```text
+mdmdmd/
 ├── pom.xml
 ├── README.md
-├── src/
-│   ├── main/java/com/mygame/
-│   │   ├── app/              # Entry point & config (GameApp, AppSettings)
-│   │   ├── cards/
-│   │   │   ├── base/         # Card interfaces (Card, ActionCard, CardType)
-│   │   │   ├── action/       # Action cards (SlyDeal, DealBreaker, DebtCollector, etc.)
-│   │   │   ├── money/        # Money cards (1M–10M)
-│   │   │   ├── property/     # Property cards (standard/wild/house/hotel)
-│   │   │   └── rent/         # Rent cards (bi-color/multi-color/wild)
-│   │   ├── core/
-│   │   │   ├── deck/         # Deck management (106 cards, shuffle/draw/discard)
-│   │   │   ├── events/       # Event system (GameEvent, listener)
-│   │   │   └── interaction/  # Interaction interface (GameInteractor)
-│   │   ├── model/            # Domain model (Player, PropertyZone, Color)
-│   │   ├── ui/
-│   │   │   └── components/   # Card UI component (CardView)
-│   │   ├── network/          # Multiplayer (GameServer, GameClient, DTO, protocol)
-│   │   └── rules/            # Rent calculation rules
-│   └── test/java/com/mygame/
-│       ├── core/             # Core engine tests
-│       └── cards/action/     # Action card tests
-└── docs/
+└── src/
+    ├── main/
+    │   ├── java/com/mygame/
+    │   │   ├── app/            # Entry point, settings, menu/lobby flow
+    │   │   ├── cards/          # Card definitions and action logic
+    │   │   ├── core/           # Game manager, deck, events, interactor
+    │   │   ├── model/          # Player, property zone, colors, assets
+    │   │   ├── network/        # Server, client, DTO, protocol
+    │   │   ├── rules/          # Rent rules
+    │   │   └── ui/             # Controllers and UI components
+    │   └── resources/
+    │       ├── audio/          # Optional background music slot
+    │       ├── images/         # Backgrounds, panels, cards, avatars
+    │       ├── GameView.fxml
+    │       ├── NetworkGameView.fxml
+    │       └── theme.css
+    └── test/java/com/mygame/
 ```
 
 ## Quick Start
 
 ```bash
-# Build & run (requires JDK 25 + Maven)
-mvnw javafx:run
+# Run the game
+mvn javafx:run
 
 # Run tests
-mvnw test
+mvn test
 ```
 
-## Game Rules
+## Core Rules
 
-**Goal:** Be the first player to collect 3 complete property sets.
+**Goal**
 
-**Each turn:**
-1. Draw 2 cards (automatic)
-2. Play up to 3 cards (deposit to bank / place property / play action)
-3. End Turn (discard down to 7 hand cards if needed)
+- Collect 3 complete property sets first.
 
-## Card Types
+**Each turn**
 
-| Type | Description |
-|------|-------------|
-| Money | 1M–10M face value, deposited to bank |
-| Property | Placed in a color zone; collect rent when set is complete |
-| Action | One-shot effects — SlyDeal, DealBreaker, DebtCollector, etc. |
-| Building | House (+3M rent) / Hotel (+5M rent) on a complete set |
-| Rent | Collect rent from opponent(s); can stack with DoubleTheRent |
+1. Draw 2 cards automatically
+2. Play up to 3 cards
+3. End the turn with 7 or fewer cards in hand
+
+**Turn timer**
+
+- Each turn uses a 180-second countdown
+- If time reaches 0, the turn ends automatically
+- If the player holds more than 7 cards, extra cards are discarded automatically before the turn closes
 
 ## Features
 
-- Complete Monopoly Deal rule set – property sets, rent, action cards, wild properties, buildings  
-- JavaFX GUI with FXML layouts – clean and responsive interface  
-- Real-time online multiplayer – full game state synchronization between clients  
-- Host-based room system – host creates room, starts game only when all players are ready  
-- In-game chat system – players can communicate during the match  
-- Event log – tracks all game actions (card plays, rent payments, trades, etc.)  
-- Customizable player profiles – change name and choose avatar for both online and offline modes
-- Card hover preview – magnification effect when hovering over a card  
-- Card flip animation – cards have front and back faces, with flipping effect when drawn/played  
-- Visual draw pile & discard pile – physical representation of both piles with card back images  
-- Property set progress display – shows "current / required" for each color group (e.g., 2/3)  
-- Clear visibility of other players' assets – view opponents' bank cards and placed property sets  
-- System notifications for player actions – real-time prompts for card plays, rent collection, turn changes, etc.  
-- Help system & rule reminders – popup dialogs explaining game rules and how to play  
-- Win detection & game flow – victory when a player collects 3 complete property sets, with automatic elimination for players leaving the game
-- Page-level navigation – robust exit and back navigation supporting hierarchical return across lobbies and game tables
-- Polished background – thematic table texture / UI background for immersive experience
+- Offline multiplayer for 2 to 5 players
+- Online room system with host create / join / ready / start flow
+- In-game chat and match event log
+- Custom player name and avatar selection
+- Card hover preview and draw/play transition animation
+- Visible draw pile and discard pile with custom back art
+- Central table area showing current player `Bank / Property / Action`
+- Expandable bottom hand drawer
+- Image slots for menu, lobby, table, panels, chat, log, buttons, cards, and avatars
+- Optional BGM with in-game volume slider
+- Auto timeout handling with warning state and auto-end turn behavior
+
+## Resource Slots
+
+Replace assets using these exact resource paths:
+
+- `src/main/resources/images/background.png`
+- `src/main/resources/images/menu/menu-hero.png`
+- `src/main/resources/images/menu/menu-panel-art.png`
+- `src/main/resources/images/lobby/lobby-hero.png`
+- `src/main/resources/images/lobby/lobby-panel.png`
+- `src/main/resources/images/lobby/lobby-side-art.png`
+- `src/main/resources/images/ui/table-surface.png`
+- `src/main/resources/images/ui/log-panel.png`
+- `src/main/resources/images/ui/chat-box.png`
+- `src/main/resources/images/ui/action-panel.png`
+- `src/main/resources/images/ui/hand-surface.png`
+- `src/main/resources/images/ui/button-overlay.png`
+- `src/main/resources/images/cards/card-front-overlay.png`
+- `src/main/resources/images/cards/card-back.png`
+- `src/main/resources/audio/bgm.mp3`
 
 ## Tests
 
-26 test cases across 6 test classes:
+28 test cases across 6 test classes:
 
 | Test Class | Cases | Coverage |
 |-----------|-------|----------|
 | GameManagerTest | 7 | Init, bank deposit, property placement, turn advance, draw rules, steal-to-win, player elimination |
 | CardManagerTest | 1 | Draw pile reshuffle from discard pile |
-| ActionCardTest | 8 | SlyDeal, DealBreaker, DebtCollector, PassGo, It'sMyBirthday, etc. |
+| ActionCardTest | 8 | SlyDeal, DealBreaker, DebtCollector, Pass Go, It's My Birthday, Just Say No interactions |
 | PlayerManagementTest | 5 | Asset valuation, asset transfer, set completion, rent with buildings |
 | GameStateDataTest | 4 | Card serialization round-trip, player data, game state DTO |
 | PropertyRentRulesTest | 3 | Rent values for brown, dark blue, and railroad sets |

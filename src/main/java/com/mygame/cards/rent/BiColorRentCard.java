@@ -3,6 +3,7 @@ package com.mygame.cards.rent;
 import com.mygame.cards.base.ActionCard;
 import com.mygame.cards.base.CardType;
 import com.mygame.core.GameManager;
+import com.mygame.core.interaction.GameInteractor;
 import com.mygame.model.Color;
 import com.mygame.model.PlayerManagement;
 
@@ -88,8 +89,17 @@ public final class BiColorRentCard implements ActionCard {
             return false;
         }
 
+        GameInteractor interactor = gameManager.getInteractor();
+        if (interactor == null) {
+            throw new IllegalStateException("interactor is not set");
+        }
+        PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
+        if (targetPlayer == null) {
+            return false;
+        }
+
         rentAmount = gameManager.resolveRentAmountWithDoubleTheRent(currentPlayer, selectedColor, rentAmount);
-        gameManager.chargeAllOpponents(currentPlayer, rentAmount);
+        gameManager.chargePlayer(currentPlayer, targetPlayer, rentAmount);
         return true;
     }
 }

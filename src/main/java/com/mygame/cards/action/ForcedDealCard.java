@@ -61,6 +61,9 @@ public final class ForcedDealCard implements ActionCard {
         if (target == null) {
             return false;
         }
+        if (gameManager.tryCancelWithJustSayNo(target, user, getName())) {
+            return false;
+        }
 
         List<Card> userSelectable = getIncompleteSetPropertyCards(user);
         List<Card> targetSelectable = getIncompleteSetPropertyCards(target);
