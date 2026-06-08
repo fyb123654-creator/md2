@@ -106,6 +106,7 @@ Replace assets using these exact resource paths:
 - `src/main/resources/images/cards/card-front-overlay.png`
 - `src/main/resources/images/cards/card-back.png`
 - `src/main/resources/audio/bgm.mp3`
+- `src/main/resources/audio/bgm.wav`
 
 ## Tests
 
