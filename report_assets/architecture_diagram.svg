@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#f8fafc"/>
+  <text x="600" y="52" text-anchor="middle" font-size="30" font-family="Arial" fill="#0f172a" font-weight="bold">Layered Architecture of the Monopoly Deal Project</text>
+  <rect x="120" y="100" width="960" height="90" rx="18" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="600" y="138" text-anchor="middle" font-size="26" font-family="Arial" font-weight="bold" fill="#1d4ed8">Presentation Layer</text>
+  <text x="600" y="172" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">GameApp, GameController, NetworkGameController, FXML Views, theme.css</text>
+  <rect x="120" y="230" width="960" height="90" rx="18" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="600" y="268" text-anchor="middle" font-size="26" font-family="Arial" font-weight="bold" fill="#166534">Application / Coordination Layer</text>
+  <text x="600" y="302" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">GameManager facade, CardManager, PendingAction, event dispatch, turn flow, validation</text>
+  <rect x="120" y="360" width="960" height="90" rx="18" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="600" y="398" text-anchor="middle" font-size="26" font-family="Arial" font-weight="bold" fill="#92400e">Domain Model Layer</text>
+  <text x="600" y="432" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">PlayerManagement, PropertyZone, Color, card hierarchies, rent rules, business constraints</text>
+  <rect x="120" y="490" width="460" height="120" rx="18" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="350" y="528" text-anchor="middle" font-size="26" font-family="Arial" font-weight="bold" fill="#6d28d9">Networking Layer</text>
+  <text x="350" y="562" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">GameServer, GameClient, NetworkProtocol</text>
+  <text x="350" y="590" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">GameStateData DTO for state synchronisation</text>
+  <rect x="620" y="490" width="460" height="120" rx="18" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="850" y="528" text-anchor="middle" font-size="26" font-family="Arial" font-weight="bold" fill="#b91c1c">Quality / Assets Layer</text>
+  <text x="850" y="562" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">JUnit tests, Surefire reports, README, images, audio, CSS resources</text>
+  <text x="850" y="590" text-anchor="middle" font-size="20" font-family="Arial" fill="#1e293b">Supports verification, maintainability, and user experience</text>
+  <line x1="600" y1="190" x2="600" y2="230" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="600" y1="320" x2="600" y2="360" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="420" y1="450" x2="350" y2="490" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="780" y1="450" x2="850" y2="490" stroke="#475569" stroke-width="3" marker-end="url(#arrow)"/>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker></defs>
+</svg>

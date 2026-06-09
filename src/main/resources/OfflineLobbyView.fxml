@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Region?>
+
+<StackPane xmlns="http://javafx.com/javafx"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.mygame.ui.OfflineLobbyController"
+           fx:id="rootPane"
+           styleClass="menu-root menu-shell">
+    <HBox spacing="24" alignment="CENTER" maxWidth="1180">
+        <VBox fx:id="heroPanel" spacing="18" prefWidth="520" styleClass="menu-card hero-image-panel offline-lobby-hero-panel" style="-fx-padding: 28;">
+            <VBox spacing="12" styleClass="hero-copy-shield">
+                <Label text="Offline Lobby" styleClass="hero-title"/>
+                <Label text="Choose the player count, names, and avatars before starting the offline match." styleClass="hero-subtitle" wrapText="true"/>
+                <VBox spacing="8" styleClass="rules-card dark-rules-card">
+                    <Label text="Offline Rules" styleClass="panel-title"/>
+                    <Label text="1. 2–5 players share one device." styleClass="rule-line" wrapText="true"/>
+                    <Label text="2. Each turn draws 2 cards and allows up to 3 plays." styleClass="rule-line" wrapText="true"/>
+                    <Label text="3. End the turn with 7 or fewer cards in hand." styleClass="rule-line" wrapText="true"/>
+                    <Label text="4. First to 3 complete sets wins." styleClass="rule-line" wrapText="true"/>
+                </VBox>
+            </VBox>
+            <StackPane fx:id="heroArtPane" styleClass="image-slot menu-panel-art-slot" prefHeight="146">
+                <Region styleClass="panel-accent-shield"/>
+            </StackPane>
+        </VBox>
+
+        <VBox fx:id="mainPanel" spacing="16" prefWidth="440" styleClass="menu-card" style="-fx-padding: 28;">
+            <Label text="Match Setup" styleClass="panel-title"/>
+            <Label fx:id="hintLabel" text="Choose players, then start the match." styleClass="panel-copy" wrapText="true"/>
+
+            <VBox spacing="8">
+                <Label text="Player Count" styleClass="panel-field-label"/>
+                <HBox spacing="8">
+                    <Button fx:id="playerCount2Button" text="2" onAction="#onPlayerCount2Clicked" styleClass="button"/>
+                    <Button fx:id="playerCount3Button" text="3" onAction="#onPlayerCount3Clicked" styleClass="button"/>
+                    <Button fx:id="playerCount4Button" text="4" onAction="#onPlayerCount4Clicked" styleClass="button"/>
+                    <Button fx:id="playerCount5Button" text="5" onAction="#onPlayerCount5Clicked" styleClass="button"/>
+                </HBox>
+            </VBox>
+
+            <VBox spacing="8">
+                <Label text="Players" styleClass="panel-field-label"/>
+                <ScrollPane fitToWidth="true" pannable="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" styleClass="zone-scroll" prefViewportHeight="360">
+                    <content>
+                        <VBox fx:id="playerConfigBox" spacing="12"/>
+                    </content>
+                </ScrollPane>
+            </VBox>
+
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Button fx:id="backButton" text="Back" onAction="#onBackClicked" styleClass="button danger image-backed-button"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Button fx:id="startButton" text="Start Match" onAction="#onStartClicked" styleClass="button success image-backed-button"/>
+            </HBox>
+        </VBox>
+    </HBox>
+</StackPane>
