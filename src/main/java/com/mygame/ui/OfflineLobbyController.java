@@ -40,10 +40,6 @@ public class OfflineLobbyController {
     private final List<ComboBox<Integer>> avatarPickers = new ArrayList<>();
     private final List<StackPane> avatarPreviews = new ArrayList<>();
 
-    public void setGameApp(GameApp gameApp) {
-        this.gameApp = gameApp;
-    }
-
     @FXML
     public void initialize() {
         ensureBackgroundsApplied();
@@ -51,6 +47,10 @@ public class OfflineLobbyController {
         selectPlayerCount(saved >= 2 && saved <= 5 ? saved : 2);
         rebuildPlayerRows();
         refreshHint();
+    }
+
+    public void setGameApp(GameApp gameApp) {
+        this.gameApp = gameApp;
     }
 
     private void ensureBackgroundsApplied() {

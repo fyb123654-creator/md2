@@ -670,6 +670,9 @@ public class GameController {
                 latestTableActionTitle = "Latest Action";
                 restartTurnTimer();
                 updateTimerDisplay();
+                if (interactor instanceof Interactor) {
+                    ((Interactor) interactor).closeActiveDialogs();
+                }
                 return;
             }
             trackedTurnIndex = currentTurnIndex;
@@ -684,6 +687,9 @@ public class GameController {
             latestTableActionTitle = "Latest Action";
             restartTurnTimer();
             updateTimerDisplay();
+            if (interactor instanceof Interactor) {
+                ((Interactor) interactor).closeActiveDialogs();
+            }
             return;
         }
         updateTimerDisplay();
@@ -795,11 +801,16 @@ public class GameController {
         if (gameManager != null && gameManager.hasWinner()) {
             return;
         }
-        if (isOnlineMode && isHost() && gameServer != null) {
-            gameServer.processSystemTimeout(trackedTurnIndex);
-            return;
-        }
-        if (isOnlineMode && !isMyTurn) {
+        if (isOnlineMode) {
+            // Online mode: GameServer handles timeout autonomously. Just show a hint.
+            if (loadingLabel != null) {
+                loadingLabel.setText("Time expired. Waiting for server...");
+            }
+            if (hintLabel != null) {
+                hintLabel.setText("Time expired. Server is ending turn automatically.");
+            }
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
             return;
         }
         if (loadingLabel != null) {
@@ -810,11 +821,7 @@ public class GameController {
         }
         selectedHandCard = null;
         handActionBox.getChildren().clear();
-        if (isOnlineMode) {
-            handleOnlineTurnTimeout();
-        } else {
-            handleOfflineTurnTimeout();
-        }
+        handleOfflineTurnTimeout();
     }
 
     private void handleOfflineTurnTimeout() {
@@ -1199,6 +1206,9 @@ public class GameController {
             } else {
                 gameServer.stop();
             }
+        }
+        if (instance == this) {
+            instance = null;
         }
     }
 
@@ -2440,11 +2450,12 @@ public class GameController {
         if (targetCard == null) return;
 
         // Build args and send to server
-        String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + targetCard.getId();
-        sendActionToServer(actionStr);
-
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        animateHandCardToDiscard(card, () -> {
+            String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + targetCard.getId();
+            sendActionToServer(actionStr);
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
     // --- Online Forced Deal ---
@@ -2469,18 +2480,18 @@ public class GameController {
             return;
         }
 
-        Card myCard = interactor.choicePorperty(currentPlayer);
+        Card myCard = interactor.choiceStealablePropertyCard(currentPlayer);
         if (myCard == null) return;
-
-        Card targetCard = interactor.choicePorperty(targetPlayer);
+        Card targetCard = interactor.choiceStealablePropertyCard(targetPlayer);
         if (targetCard == null) return;
 
         // Build args
-        String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + myCard.getId() + ":" + targetCard.getId();
-        sendActionToServer(actionStr);
-
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        animateHandCardToDiscard(card, () -> {
+            String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + myCard.getId() + ":" + targetCard.getId();
+            sendActionToServer(actionStr);
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
 
@@ -2522,9 +2533,11 @@ public class GameController {
         }
 
         // 3) No-parameter action cards
-        sendActionToServer("PLAY_ACTION:" + card.getId());
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        animateHandCardToDiscard(card, () -> {
+            sendActionToServer("PLAY_ACTION:" + card.getId());
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
     // --- Handle rent cards and optionally stack Double The Rent ---
     private void handleOnlineRent(Card rentCard) {
@@ -2573,20 +2586,22 @@ public class GameController {
 
 
         // 4) Send action to server with rent mode + optional double card id
-        if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-            // Wild rent targets a single player
-            PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
-            if (targetPlayer == null) return;
-            // PLAY_ACTION:<rentId>:WILD_RENT:<color>:<targetPlayerId>:<doubleCardId>
-            sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":WILD_RENT:" + selectedColor.name() + ":" + targetPlayer.getPlayerId() + ":" + doubleCardId);
-        } else {
-            // Bi-color rent targets all opponents:
-            // PLAY_ACTION:<rentId>:BI_RENT:<color>:<doubleCardId>
-            sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":BI_RENT:" + selectedColor.name() + ":" + doubleCardId);
-        }
-
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        String finalDoubleCardId = doubleCardId;
+        animateHandCardToDiscard(rentCard, () -> {
+            if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
+                // Wild rent targets a single player
+                PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
+                if (targetPlayer == null) return;
+                // PLAY_ACTION:<rentId>:WILD_RENT:<color>:<targetPlayerId>:<doubleCardId>
+                sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":WILD_RENT:" + selectedColor.name() + ":" + targetPlayer.getPlayerId() + ":" + finalDoubleCardId);
+            } else {
+                // Bi-color rent targets all opponents:
+                // PLAY_ACTION:<rentId>:BI_RENT:<color>:<doubleCardId>
+                sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":BI_RENT:" + selectedColor.name() + ":" + finalDoubleCardId);
+            }
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
     // --- Online house/hotel: player chooses which color set to attach to ---
@@ -2601,10 +2616,11 @@ public class GameController {
         Color selectedColor = zone.getColor();
 
         // PLAY_ACTION:<cardId>:BUILDING:<color>
-        sendActionToServer("PLAY_ACTION:" + buildingCard.getId() + ":BUILDING:" + selectedColor.name());
-
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        animateHandCardToDiscard(buildingCard, () -> {
+            sendActionToServer("PLAY_ACTION:" + buildingCard.getId() + ":BUILDING:" + selectedColor.name());
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
     private void handleOnlineDealBreaker(Card card) {
         if (!ensureOnlinePlayAllowed()) {
@@ -2623,11 +2639,12 @@ public class GameController {
             return;
         }
 
-        String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + selectedZone.getColor().name();
-        sendActionToServer(actionStr);
-
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        animateHandCardToDiscard(card, () -> {
+            String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + selectedZone.getColor().name();
+            sendActionToServer(actionStr);
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
     // --- Online Debt Collector ---
@@ -2652,16 +2669,18 @@ public class GameController {
 
         // Send to server:
         // PLAY_ACTION:<cardId>:<targetPlayerId>
-        String actionStr =
-                "PLAY_ACTION:"
-                        + card.getId()
-                        + ":"
-                        + targetPlayer.getPlayerId();
+        animateHandCardToDiscard(card, () -> {
+            String actionStr =
+                    "PLAY_ACTION:"
+                            + card.getId()
+                            + ":"
+                            + targetPlayer.getPlayerId();
 
-        sendActionToServer(actionStr);
+            sendActionToServer(actionStr);
 
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
     private boolean hasAnyProperty(PlayerManagement player) {
@@ -2676,9 +2695,11 @@ public class GameController {
         if (!ensureOnlinePlayAllowed()) {
             return;
         }
-        sendActionToServer("DEPOSIT:" + card.getId());
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        animateHandCardToTarget(card, myBankBox, () -> {
+            sendActionToServer("DEPOSIT:" + card.getId());
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
     private void sendPlacePropertyAction(Card card) {
@@ -2706,9 +2727,12 @@ public class GameController {
             }
         }
 
-        sendActionToServer("PLACE_PROPERTY:" + card.getId() + ":" + selectedColor.name());
-        selectedHandCard = null;
-        handActionBox.getChildren().clear();
+        Color finalColor = selectedColor;
+        animateHandCardToTarget(card, myPropertyBox, () -> {
+            sendActionToServer("PLACE_PROPERTY:" + card.getId() + ":" + finalColor.name());
+            selectedHandCard = null;
+            handActionBox.getChildren().clear();
+        });
     }
 
     private void renderHandActionButtons() {

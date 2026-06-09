@@ -22,5 +22,5 @@ public interface GameInteractor {
 
     PropertyZone choiceBuildingPropertyZone(PlayerManagement player, Card buildingCard);
 
-    Card choicePorperty(PlayerManagement targetPlayer);
+    Card choiceProperty(PlayerManagement targetPlayer);
 }

@@ -69,6 +69,42 @@ public class GameStateData implements Serializable {
         return data;
     }
 
+    public GameStateData filterForPlayer(String playerId) {
+        GameStateData filtered = new GameStateData();
+        filtered.currentPlayerIndex = this.currentPlayerIndex;
+        filtered.turnClockId = this.turnClockId;
+        filtered.playedCardsThisTurn = this.playedCardsThisTurn;
+        filtered.maxPlayCountPerTurn = this.maxPlayCountPerTurn;
+        filtered.gameStarted = this.gameStarted;
+        filtered.gameOver = this.gameOver;
+        filtered.winner = this.winner;
+        filtered.drawPileCount = this.drawPileCount;
+        filtered.discardPileCount = this.discardPileCount;
+        if (this.eventLog != null) {
+            filtered.eventLog = new ArrayList<>(this.eventLog);
+        }
+
+        for (PlayerData pd : this.players) {
+            PlayerData newPd = new PlayerData();
+            newPd.setPlayerId(pd.getPlayerId());
+            newPd.setPlayerName(pd.getPlayerName());
+            newPd.setAvatarId(pd.getAvatarId());
+            newPd.setHandCardCount(pd.getHandCardCount());
+            
+            // Only include hand cards if this is the target player
+            if (pd.getPlayerId().equals(playerId)) {
+                newPd.setHandCards(new ArrayList<>(pd.getHandCards()));
+            } else {
+                newPd.setHandCards(new ArrayList<>());
+            }
+            
+            newPd.setBankCards(new ArrayList<>(pd.getBankCards()));
+            newPd.setPropertyZones(new HashMap<>(pd.getPropertyZones()));
+            filtered.players.add(newPd);
+        }
+        return filtered;
+    }
+
     // Getters and Setters
     public int getCurrentPlayerIndex() { return currentPlayerIndex; }
     public void setCurrentPlayerIndex(int currentPlayerIndex) { this.currentPlayerIndex = currentPlayerIndex; }

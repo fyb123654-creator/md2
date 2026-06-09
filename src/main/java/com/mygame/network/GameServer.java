@@ -74,6 +74,9 @@ public class GameServer {
     private Runnable pendingJsnSuccessCallback = null;
     private Runnable pendingJsnCancelCallback = null;
 
+    private java.util.Timer serverTimer;
+    private java.util.TimerTask timeoutTask;
+
     private void clearActionJustSayNoState() {
         isWaitingForJsnAction = false;
         pendingJsnVictim = null;
@@ -247,9 +250,10 @@ public class GameServer {
             if (i > 0) sb.append(",");
             String name = (i >= 0 && i < playerNames.length) ? playerNames[i] : null;
             if (name == null || name.isBlank()) {
-                name = "Player" + (i + 1);
+                name = "";
+            } else {
+                name = sanitizeRoomUpdateField(name);
             }
-            name = sanitizeRoomUpdateField(name);
             sb.append("P")
                     .append(i + 1)
                     .append("=")
@@ -274,7 +278,15 @@ public class GameServer {
         GameStateData state = GameStateData.fromGameManager(gameManager);
         state.setTurnClockId(turnClockId);
         lastBroadcastState = state;
-        broadcast(NetworkProtocol.gameState(state));
+        
+        synchronized (clientsLock) {
+            for (ClientHandler client : clientsByIndex.values()) {
+                if (client != null && client.isConnected() && client.isRegistered()) {
+                    client.send(NetworkProtocol.gameState(state));
+                }
+            }
+        }
+        
         if (listener != null) listener.onStateChanged(state);
         if (gameManager.isGameOver()) {
             String winner = gameManager.getWinner().getName();
@@ -330,6 +342,8 @@ public class GameServer {
 
     public void stop() {
         running = false;
+        if (timeoutTask != null) timeoutTask.cancel();
+        if (serverTimer != null) serverTimer.cancel();
         try {
             if (serverSocket != null) serverSocket.close();
             for (ClientHandler client : getClientSnapshot()) {
@@ -401,58 +415,60 @@ public class GameServer {
     }
 
     public void processSystemTimeout(int expectedTurnIndex) {
-        if (gameManager == null || !gameManager.isGameStarted() || gameManager.isGameOver()) {
-            return;
-        }
-        if (expectedTurnIndex >= 0 && gameManager.getCurrentPlayerIndex() != expectedTurnIndex) {
-            return;
-        }
-
-        if (isWaitingForJsnAction && pendingJsnResponder != null) {
-            int responderIndex = findPlayerIndexById(pendingJsnResponder.getPlayerId());
-            if (responderIndex >= 0) {
-                restartTurnClock();
-                processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
+        synchronized (this) {
+            if (gameManager == null || !gameManager.isGameStarted() || gameManager.isGameOver()) {
+                return;
             }
-            return;
-        }
-
-        if (isWaitingForJsn && pendingPaymentJsnResponderId != null) {
-            int responderIndex = findPlayerIndexById(pendingPaymentJsnResponderId);
-            if (responderIndex >= 0) {
-                restartTurnClock();
-                processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
+            if (expectedTurnIndex >= 0 && gameManager.getCurrentPlayerIndex() != expectedTurnIndex) {
+                return;
             }
-            return;
-        }
 
-        if (isWaitingForPayment && pendingVictimId != null) {
-            int victimIndex = findPlayerIndexById(pendingVictimId);
-            PlayerManagement victim = findPlayerById(pendingVictimId);
-            if (victimIndex >= 0 && victim != null) {
-                String selection = buildAutoPaymentSelection(victim, pendingPaymentAmount);
-                restartTurnClock();
-                processSystemAction(victimIndex, "PAYMENT_RESPONSE:" + selection);
-            }
-            return;
-        }
-
-        int currentIndex = gameManager.getCurrentPlayerIndex();
-        PlayerManagement current = gameManager.getPlayersView().get(currentIndex);
-        int overflow = Math.max(0, current.getHandCardCount() - PlayerManagement.MAX_HAND_SIZE);
-        if (overflow > 0) {
-            List<Card> hand = new ArrayList<>(current.getHandCardsView());
-            Collections.shuffle(hand);
-            for (int i = 0; i < overflow && i < hand.size(); i++) {
-                Card c = hand.get(i);
-                if (c != null && c.getId() != null) {
-                    processSystemAction(currentIndex, "DISCARD:" + c.getId());
+            if (isWaitingForJsnAction && pendingJsnResponder != null) {
+                int responderIndex = findPlayerIndexById(pendingJsnResponder.getPlayerId());
+                if (responderIndex >= 0) {
+                    restartTurnClock();
+                    processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
                 }
+                return;
+            }
+
+            if (isWaitingForJsn && pendingPaymentJsnResponderId != null) {
+                int responderIndex = findPlayerIndexById(pendingPaymentJsnResponderId);
+                if (responderIndex >= 0) {
+                    restartTurnClock();
+                    processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
+                }
+                return;
+            }
+
+            if (isWaitingForPayment && pendingVictimId != null) {
+                int victimIndex = findPlayerIndexById(pendingVictimId);
+                PlayerManagement victim = findPlayerById(pendingVictimId);
+                if (victimIndex >= 0 && victim != null) {
+                    String selection = buildAutoPaymentSelection(victim, pendingPaymentAmount);
+                    restartTurnClock();
+                    processSystemAction(victimIndex, "PAYMENT_RESPONSE:" + selection);
+                }
+                return;
+            }
+
+            int currentIndex = gameManager.getCurrentPlayerIndex();
+            PlayerManagement current = gameManager.getPlayersView().get(currentIndex);
+            int overflow = Math.max(0, current.getHandCardCount() - PlayerManagement.MAX_HAND_SIZE);
+            if (overflow > 0) {
+                List<Card> hand = new ArrayList<>(current.getHandCardsView());
+                Collections.shuffle(hand);
+                for (int i = 0; i < overflow && i < hand.size(); i++) {
+                    Card c = hand.get(i);
+                    if (c != null && c.getId() != null) {
+                        processSystemAction(currentIndex, "DISCARD:" + c.getId());
+                    }
+                }
+                processSystemAction(currentIndex, "END_TURN");
+                return;
             }
             processSystemAction(currentIndex, "END_TURN");
-            return;
         }
-        processSystemAction(currentIndex, "END_TURN");
     }
 
     public int getTurnClockId() {
@@ -461,6 +477,30 @@ public class GameServer {
 
     private void restartTurnClock() {
         turnClockId++;
+        scheduleTimeout();
+    }
+
+    private void scheduleTimeout() {
+        if (timeoutTask != null) {
+            timeoutTask.cancel();
+        }
+        if (serverTimer == null) {
+            serverTimer = new java.util.Timer("GameServerTimer", true);
+        }
+        if (!running || abortBroadcasted) {
+            return;
+        }
+        
+        final int currentTurnIndex = gameManager != null ? gameManager.getCurrentPlayerIndex() : -1;
+        timeoutTask = new java.util.TimerTask() {
+            @Override
+            public void run() {
+                // Execute on a different thread, processSystemTimeout handles synchronization
+                processSystemTimeout(currentTurnIndex);
+            }
+        };
+        // Timeout is 180 seconds plus a small buffer
+        serverTimer.schedule(timeoutTask, 180000L);
     }
 
     private void processSystemAction(int playerIndex, String action) {
@@ -567,6 +607,10 @@ public class GameServer {
             int totalAssetValue = victim.calculateAssetTotalValue();
             if (totalAssetValue <= pendingPaymentAmount) {
                 victim.transferAllAssetsTo(collector);
+                int victimIndex = findPlayerIndexById(victim.getPlayerId());
+                if (victimIndex >= 0) {
+                    gameManager.eliminatePlayer(victimIndex);
+                }
                 clearSinglePaymentState();
                 if (pendingPaymentQueue != null) {
                     currentPaymentIndex++;
@@ -937,6 +981,10 @@ public class GameServer {
 
         private void transferAllAssetsToCollectorHand(PlayerManagement collector, PlayerManagement victim) {
             victim.transferAllAssetsTo(collector);
+            int victimIndex = findPlayerIndexById(victim.getPlayerId());
+            if (victimIndex >= 0) {
+                gameManager.eliminatePlayer(victimIndex);
+            }
         }
 
         private void handleToggleReady(String content) {
@@ -965,59 +1013,63 @@ public class GameServer {
         }
 
         private void sendCurrentGameState() {
-            send(NetworkProtocol.gameState(GameStateData.fromGameManager(gameManager)));
+            GameStateData state = GameStateData.fromGameManager(gameManager);
+            state.setTurnClockId(turnClockId);
+            send(NetworkProtocol.gameState(state));
         }
 
         // ========== Core: handle player actions ==========
         private void processPlayerAction(String action) {
-            PlayerManagement currentPlayer = gameManager.getPlayersView().get(playerIndex);
+            synchronized (GameServer.this) {
+                PlayerManagement currentPlayer = gameManager.getPlayersView().get(playerIndex);
 
-            if (waitingForJsnAction(action, currentPlayer)) return;
-            if (waitingForPaymentResponse(action, currentPlayer)) return;
+                if (waitingForJsnAction(action, currentPlayer)) return;
+                if (waitingForPaymentResponse(action, currentPlayer)) return;
 
-            if (gameManager.getCurrentPlayerIndex() != playerIndex) {
-                send(NetworkProtocol.error("It's not your turn!"));
-                return;
-            }
-
-            try {
-                if ("END_TURN".equals(action)) {
-                    handleEndTurn(currentPlayer);
+                if (gameManager.getCurrentPlayerIndex() != playerIndex) {
+                    send(NetworkProtocol.error("It's not your turn!"));
                     return;
                 }
 
-                String[] parts = action.split(":");
-                if (parts.length < 2) {
-                    send(NetworkProtocol.error("Invalid action format"));
-                    sendCurrentGameState();
-                    return;
+                try {
+                    if ("END_TURN".equals(action)) {
+                        handleEndTurn(currentPlayer);
+                        return;
+                    }
+
+                    String[] parts = action.split(":");
+                    if (parts.length < 2) {
+                        send(NetworkProtocol.error("Invalid action format"));
+                        sendCurrentGameState();
+                        return;
+                    }
+
+                    String actionType = parts[0];
+                    String cardId = parts[1];
+
+                    if ("SWITCH_PROPERTY_COLOR".equals(actionType)) {
+                        handleSwitchPropertyColor(parts, currentPlayer, cardId);
+                        return;
+                    }
+
+                    if (!"DISCARD".equals(actionType) && !gameManager.canCurrentPlayerPlayCard()) {
+                        send(NetworkProtocol.error("You have already played the maximum number of cards this turn"));
+                        sendCurrentGameState();
+                        return;
+                    }
+
+                    Card targetCard = findCardInHand(currentPlayer, cardId);
+                    if (targetCard == null) {
+                        send(NetworkProtocol.error("Card not found"));
+                        sendCurrentGameState();
+                        return;
+                    }
+
+                    dispatchCardAction(actionType, parts, currentPlayer, targetCard);
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Action failed: " + e.getMessage(), e);
+                    send(NetworkProtocol.error("Action failed: " + e.getMessage()));
                 }
-
-                String actionType = parts[0];
-                String cardId = parts[1];
-
-                if ("SWITCH_PROPERTY_COLOR".equals(actionType)) {
-                    handleSwitchPropertyColor(parts, currentPlayer, cardId);
-                    return;
-                }
-
-                if (!"DISCARD".equals(actionType) && !gameManager.canCurrentPlayerPlayCard()) {
-                    send(NetworkProtocol.error("You have already played the maximum number of cards this turn"));
-                    sendCurrentGameState();
-                    return;
-                }
-
-                Card targetCard = findCardInHand(currentPlayer, cardId);
-                if (targetCard == null) {
-                    send(NetworkProtocol.error("Card not found"));
-                    sendCurrentGameState();
-                    return;
-                }
-
-                dispatchCardAction(actionType, parts, currentPlayer, targetCard);
-            } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Action failed: " + e.getMessage(), e);
-                send(NetworkProtocol.error("Action failed: " + e.getMessage()));
             }
         }
 
@@ -1425,8 +1477,13 @@ public class GameServer {
             Card cardToSteal = findPropertyCardById(targetPlayer, targetCardId);
             if (targetPlayer != null && myCard != null && cardToSteal != null) {
                 Color targetColor = findColorOfProperty(targetPlayer, cardToSteal);
+                Color myColor = findColorOfProperty(currentPlayer, myCard);
                 if (targetColor != null && targetPlayer.isSetComplete(targetColor)) {
                     send(NetworkProtocol.error("Cannot steal a property from a complete set"));
+                    return;
+                }
+                if (myColor != null && currentPlayer.isSetComplete(myColor)) {
+                    send(NetworkProtocol.error("Cannot give away a property from your own complete set"));
                     return;
                 }
                 
@@ -1436,13 +1493,13 @@ public class GameServer {
                 gameManager.recordPlayedCardAfterExternalResolution();
 
                 Runnable success = () -> {
-                    Color myColor = findColorOfProperty(currentPlayer, myCard);
+                    Color mColor = findColorOfProperty(currentPlayer, myCard);
                     // re-check color just in case
                     Color tColor = findColorOfProperty(targetPlayer, cardToSteal);
-                    if (myColor != null && tColor != null) {
+                    if (mColor != null && tColor != null) {
                         if (currentPlayer.removeFromPropertyZones(myCard) && targetPlayer.removeFromPropertyZones(cardToSteal)) {
                             currentPlayer.addProperty(tColor, (PropertyCard) cardToSteal);
-                            targetPlayer.addProperty(myColor, (PropertyCard) myCard);
+                            targetPlayer.addProperty(mColor, (PropertyCard) myCard);
                             broadcastGameState();
                         }
                     }
@@ -1466,14 +1523,16 @@ public class GameServer {
                 gameManager.recordPlayedCardAfterExternalResolution();
 
                 Runnable success = () -> {
-                    List<PropertyCard> props = new ArrayList<>(zone.getPropertiesView());
-                    for (PropertyCard pc : props) {
-                        if (targetPlayer.removeFromPropertyZones(pc)) currentPlayer.addProperty(color, pc);
+                    PropertyZone removedZone = targetPlayer.removeEntirePropertyZone(color);
+                    if (removedZone != null) {
+                        for (PropertyCard pc : removedZone.getPropertiesView()) {
+                            currentPlayer.addProperty(color, pc);
+                        }
+                        BuildingCard house = removedZone.getHouse();
+                        if (house != null) currentPlayer.addBuilding(color, house);
+                        BuildingCard hotel = removedZone.getHotel();
+                        if (hotel != null) currentPlayer.addBuilding(color, hotel);
                     }
-                    BuildingCard house = zone.getHouse();
-                    if (house != null && targetPlayer.removeFromPropertyZones(house)) currentPlayer.addBuilding(color, house);
-                    BuildingCard hotel = zone.getHotel();
-                    if (hotel != null && targetPlayer.removeFromPropertyZones(hotel)) currentPlayer.addBuilding(color, hotel);
                     broadcastGameState();
                 };
                 Runnable cancel = () -> {

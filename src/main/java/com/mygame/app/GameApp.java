@@ -129,6 +129,7 @@ public class GameApp extends Application {
                 "4. Build 3 complete property sets to win the match."
         );
         offlineRulesCard.getStyleClass().add("dark-rules-card");
+
         VBox heroShield = new VBox(12, title, subtitle, offlineRulesCard);
         heroShield.getStyleClass().add("hero-copy-shield");
         leftHero.getChildren().add(heroShield);
@@ -145,7 +146,11 @@ public class GameApp extends Application {
         panelCopy.setWrapText(true);
         StackPane rightPanelArt = createPanelAccentSlot("/images/menu/menu-panel-art.png", 372, 150);
         VBox.setVgrow(nameField, Priority.NEVER);
-        rightPanel.getChildren().addAll(panelTitle, panelCopy, nameField, avatarLabel, avatarRow, singlePlayerBtn, onlineBtn, helpBtn, rightPanelArt);
+
+        Button exitBtn = createMenuActionButton("Exit Game", "danger");
+        exitBtn.setOnAction(e -> javafx.application.Platform.exit());
+
+        rightPanel.getChildren().addAll(panelTitle, panelCopy, nameField, avatarLabel, avatarRow, singlePlayerBtn, onlineBtn, helpBtn, exitBtn, rightPanelArt);
 
         shell.getChildren().addAll(leftHero, rightPanel);
         root.getChildren().add(shell);

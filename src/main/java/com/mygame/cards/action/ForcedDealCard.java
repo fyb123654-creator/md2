@@ -73,12 +73,12 @@ public final class ForcedDealCard implements ActionCard {
             return false;
         }
 
-        Card userCard = interactor.choicePorperty(user);
+        Card userCard = interactor.choiceStealablePropertyCard(user);
         if (userCard == null || !userSelectable.contains(userCard)) {
             return false;
         }
 
-        Card targetCard = interactor.choicePorperty(target);
+        Card targetCard = interactor.choiceStealablePropertyCard(target);
         if (targetCard == null || !targetSelectable.contains(targetCard)) {
             return false;
         }

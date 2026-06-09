@@ -104,6 +104,10 @@ public class PlayerManagement {
         return total;
     }
 
+    public PropertyZone removeEntirePropertyZone(Color color) {
+        return propertyZones.remove(color);
+    }
+
     public Map<Color, PropertyZone> getPropertyZonesView() {
         return Collections.unmodifiableMap(propertyZones);
     }
@@ -400,13 +404,13 @@ public class PlayerManagement {
     }
 
     /**
-     * Transfers all assets (bank + properties + buildings) from this player to the collector's hand.
+     * Transfers all assets (bank + properties + buildings) from this player to the collector's table.
      */
     public void transferAllAssetsTo(PlayerManagement collector) {
         List<Card> bankCopy = new ArrayList<>(bankCards);
         for (Card c : bankCopy) {
             if (removeFromBank(c)) {
-                collector.addToHand(c);
+                collector.receiveAssetToTable(c);
             }
         }
         List<Card> props = new ArrayList<>();
@@ -417,8 +421,32 @@ public class PlayerManagement {
         }
         for (Card c : props) {
             if (removeFromPropertyZones(c)) {
-                collector.addToHand(c);
+                collector.receiveAssetToTable(c);
             }
+        }
+    }
+
+    public void receiveAssetToTable(Card card) {
+        if (card instanceof PropertyCard pc) {
+            // Find best color to place it
+            List<Color> playable = new ArrayList<>(pc.getPlayableColors());
+            Color chosenColor = playable.get(0);
+            for (Color color : playable) {
+                if (propertyZones.containsKey(color) && !isSetComplete(color)) {
+                    chosenColor = color;
+                    break;
+                }
+            }
+            addProperty(chosenColor, pc);
+        } else if (card instanceof BuildingCard bc) {
+            // Just put it in the bank if we cannot place it safely automatically, or we can try to place it
+            // According to Monopoly Deal rules, buildings can only be placed on complete sets.
+            // But if received as payment, they must go to bank if they can't be placed.
+            // Actually, buildings received as payment MUST be placed on the table, but if there's no complete set, they can be banked.
+            // Money/Action/Building cards can be banked.
+            bankCards.add(bc);
+        } else {
+            bankCards.add(card);
         }
     }
 

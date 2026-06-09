@@ -16,6 +16,7 @@ import com.mygame.model.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class GameManager {
@@ -511,7 +512,24 @@ public class GameManager {
 
         List<Card> selectedCards = interactor.showSelectableAssets(payer, amount);
         if (selectedCards.isEmpty()) {
-            return;
+            // Fallback: auto-pick assets to prevent evasion
+            selectedCards = new ArrayList<>();
+            int currentTotal = 0;
+            for (Card c : payer.getBankCardsView()) {
+                selectedCards.add(c);
+                currentTotal += c.getValue();
+                if (currentTotal >= amount) break;
+            }
+            if (currentTotal < amount) {
+                for (Map.Entry<Color, PropertyZone> entry : payer.getPropertyZonesView().entrySet()) {
+                    for (Card c : entry.getValue().getPropertiesView()) {
+                        selectedCards.add(c);
+                        currentTotal += c.getValue();
+                        if (currentTotal >= amount) break;
+                    }
+                    if (currentTotal >= amount) break;
+                }
+            }
         }
 
         int selectedValue = 0;
@@ -524,7 +542,7 @@ public class GameManager {
 
         for (Card card : selectedCards) {
             if (payer.removeFromBank(card) || payer.removeFromPropertyZones(card)) {
-                collector.addToHand(card);
+                collector.receiveAssetToTable(card);
             }
         }
         checkVictoryCondition();

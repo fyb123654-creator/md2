@@ -74,21 +74,19 @@ public final class DealBreakerCard implements ActionCard {
             throw new IllegalStateException("You can only take a completed property set: " + selectedColor);
         }
 
-        List<PropertyCard> propertiesToTransfer = new ArrayList<>(selectedZone.getPropertiesView());
-        for (PropertyCard propertyCard : propertiesToTransfer) {
-            if (selectedZone.removeCard(propertyCard)) {
+        PropertyZone removedZone = targetPlayer.removeEntirePropertyZone(selectedColor);
+        if (removedZone != null) {
+            for (PropertyCard propertyCard : removedZone.getPropertiesView()) {
                 currentPlayer.addProperty(selectedColor, propertyCard);
             }
-        }
-
-        BuildingCard house = selectedZone.getHouse();
-        if (house != null && selectedZone.removeCard(house)) {
-            currentPlayer.addBuilding(selectedColor, house);
-        }
-
-        BuildingCard hotel = selectedZone.getHotel();
-        if (hotel != null && selectedZone.removeCard(hotel)) {
-            currentPlayer.addBuilding(selectedColor, hotel);
+            BuildingCard house = removedZone.getHouse();
+            if (house != null) {
+                currentPlayer.addBuilding(selectedColor, house);
+            }
+            BuildingCard hotel = removedZone.getHotel();
+            if (hotel != null) {
+                currentPlayer.addBuilding(selectedColor, hotel);
+            }
         }
         return true;
     }

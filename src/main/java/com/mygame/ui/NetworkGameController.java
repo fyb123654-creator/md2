@@ -109,7 +109,6 @@ public class NetworkGameController {
         refreshLanInfo(false, false, portField == null ? 12345 : safeParsePort(portField.getText(), 12345));
         applyExplicitLobbyImages();
         installButtonGraphics();
-
     }
 
     private void installButtonGraphics() {
@@ -273,9 +272,11 @@ public class NetworkGameController {
         if (hostButton != null) {
             hostButton.setText("Create Game");
         }
+        localReady = false;
         if (readyButton != null) {
             readyButton.setDisable(true);
             readyButton.setText("Ready");
+            readyButton.getStyleClass().remove("ready-active");
         }
         stopReadyAttention();
         if (startButton != null) startButton.setDisable(true);
@@ -303,9 +304,11 @@ public class NetworkGameController {
         if (hostButton != null) {
             hostButton.setText("Confirm Create Game");
         }
+        localReady = false;
         if (readyButton != null) {
             readyButton.setDisable(true);
             readyButton.setText("Ready");
+            readyButton.getStyleClass().remove("ready-active");
         }
         stopReadyAttention();
         if (startButton != null) startButton.setDisable(true);
@@ -808,6 +811,7 @@ public class NetworkGameController {
         if (content == null || content.isBlank()) return;
         lobbyPlayers.clear();
         String[] parts = content.split(",");
+        int onlineCount = 0;
         for (int i = 0; i < parts.length; i++) {
             String p = parts[i];
             String[] kv = p.split("=");
@@ -815,6 +819,7 @@ public class NetworkGameController {
             String payload = kv.length > 1 ? kv[1] : "";
             String name = seatLabel;
             boolean ready = false;
+            boolean isOccupied = false;
             if (!payload.isBlank()) {
                 String[] fields = payload.split("\\|", -1);
                 if (fields.length == 1) {
@@ -822,8 +827,10 @@ public class NetworkGameController {
                 } else {
                     name = fields[0].isBlank() ? seatLabel : fields[0];
                     ready = "1".equals(fields[fields.length - 1]);
+                    isOccupied = !fields[0].isBlank();
                 }
             }
+            if (isOccupied) onlineCount++;
             String label = seatLabel + ": " + name;
             if (i == localPlayerIndex) {
                 label += " (You)";
@@ -831,7 +838,7 @@ public class NetworkGameController {
             lobbyPlayers.add(label + (ready ? " ✓" : ""));
         }
         refreshLobbyPlayerList();
-        statusLabel.setText("Lobby: " + lobbyPlayers.size() + " players");
+        statusLabel.setText("Lobby: " + onlineCount + "/" + lobbyPlayers.size() + " players");
     }
 
     private void refreshLobbyPlayerList() {

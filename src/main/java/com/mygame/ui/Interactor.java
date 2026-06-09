@@ -21,11 +21,31 @@ import java.util.stream.Collectors;
 
 public class Interactor implements GameInteractor {
 
+    private Dialog<?> activeDialog;
+
+    public void closeActiveDialogs() {
+        if (activeDialog != null) {
+            javafx.application.Platform.runLater(() -> {
+                if (activeDialog != null) {
+                    if (activeDialog instanceof Dialog) {
+                        Dialog<?> d = (Dialog<?>) activeDialog;
+                        if (d.isShowing()) {
+                            // Close via Window so it breaks out of showAndWait properly
+                            d.getDialogPane().getScene().getWindow().hide();
+                        }
+                    }
+                }
+                activeDialog = null;
+            });
+        }
+    }
+
     public List<Card> showSelectableAssets(PlayerManagement targetPlayer, int requiredAmount) {
         if (targetPlayer == null) throw new IllegalArgumentException("targetPlayer cannot be null");
         if (requiredAmount < 0) throw new IllegalArgumentException("requiredAmount cannot be negative");
 
         Dialog<List<Card>> dialog = new Dialog<>();
+        activeDialog = dialog;
         dialog.setTitle("Select Assets");
         dialog.setHeaderText("Select assets of " + targetPlayer.getName() + " (multiple selection)");
         final boolean[] allowDialogClose = {false};
@@ -159,10 +179,11 @@ public class Interactor implements GameInteractor {
     }
 
     @Override
-    public Card choicePorperty(PlayerManagement targetPlayer) {
+    public Card choiceProperty(PlayerManagement targetPlayer) {
         if (targetPlayer == null) throw new IllegalArgumentException("targetPlayer cannot be null");
 
         Dialog<Card> dialog = new Dialog<>();
+        activeDialog = dialog;
         dialog.setTitle("Choose property card");
         dialog.setHeaderText("Select one property card from " + targetPlayer.getName());
 
@@ -240,6 +261,7 @@ public class Interactor implements GameInteractor {
         if (player == null) throw new IllegalArgumentException("player cannot be null");
 
         Dialog<PropertyZone> dialog = new Dialog<>();
+        activeDialog = dialog;
         dialog.setTitle("Choose property color");
         dialog.setHeaderText("Select a property set of " + player.getName());
 
@@ -312,6 +334,7 @@ public class Interactor implements GameInteractor {
         boolean isHotel = buildingCard.getName() != null && buildingCard.getName().toLowerCase().contains("hotel");
 
         Dialog<PropertyZone> dialog = new Dialog<>();
+        activeDialog = dialog;
         dialog.setTitle("Choose property set");
         dialog.setHeaderText("Select a complete set for " + buildingCard.getName());
 
@@ -389,6 +412,7 @@ public class Interactor implements GameInteractor {
 
         List<String> candidateNames = candidates.stream().map(PlayerManagement::getName).collect(Collectors.toList());
         ChoiceDialog<String> dialog = new ChoiceDialog<>(candidateNames.get(0), candidateNames);
+        activeDialog = dialog;
         dialog.setTitle("Choose target player");
         dialog.setHeaderText("Select a target player");
         dialog.setContentText("Target player:");
@@ -402,6 +426,7 @@ public class Interactor implements GameInteractor {
     @Override
     public boolean confirmJustSayNo(PlayerManagement targetPlayer, PlayerManagement sourcePlayer, String actionName) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        activeDialog = alert;
         alert.setTitle("Just Say No");
         alert.setHeaderText(targetPlayer.getName() + " do you want to play Just Say No?");
         alert.setContentText(sourcePlayer.getName() + " used " + actionName + ". Cancel it?");
@@ -416,6 +441,7 @@ public class Interactor implements GameInteractor {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
                 "You have a Double The Rent card.\nDo you want to play it to double the rent to " + (baseRentAmount * 2) + "M?",
                 yesButton, noButton);
+        activeDialog = alert;
         alert.setTitle("Double The Rent?");
         alert.setHeaderText("Double Rent");
 
@@ -428,6 +454,7 @@ public class Interactor implements GameInteractor {
         if (targetPlayer == null) throw new IllegalArgumentException("targetPlayer cannot be null");
 
         Dialog<Card> dialog = new Dialog<>();
+        activeDialog = dialog;
         dialog.setTitle("Choose stealable property");
         dialog.setHeaderText("Select a property card that is not part of a complete set");
 
