@@ -329,7 +329,7 @@ public class Interactor implements GameInteractor {
             PropertyZone zone = entry.getValue();
             if (!player.isSetComplete(color)) continue;
             if (isHouse && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() != null)) continue;
-            if (isHotel && zone.getHotel() != null) continue;
+            if (isHotel && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() == null || zone.getHotel() != null)) continue;
 
             String label = "[" + color.name() + "] (properties: " + zone.getPropertiesView().size()
                     + (zone.getHouse() != null ? ", House" : "")

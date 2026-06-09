@@ -2855,11 +2855,19 @@ public class GameController {
         try {
             animateHandCardToDiscard(card, () -> {
                 try {
+                    int playedBefore = gameManager.getPlayedCardsThisTurn();
                     gameManager.playActionCard(card);
+                    if (gameManager.getPlayedCardsThisTurn() == playedBefore && !gameManager.hasWinner()) {
+                        restoreFailedAnimatedTableAction();
+                        updateUI();
+                        return;
+                    }
                     selectedHandCard = null;
                     updateUI();
                     broadcastStateIfHost();
                 } catch (Exception e) {
+                    restoreFailedAnimatedTableAction();
+                    updateUI();
                     showError("Action failed: " + e.getMessage());
                 }
             });
@@ -2892,15 +2900,22 @@ public class GameController {
 
         animateHandCardToDiscard(rentCard, () -> {
             try {
+                int playedBefore = gameManager.getPlayedCardsThisTurn();
                 // Use the proven playActionCard flow: execute() handles
                 // the rent charge, then the card is removed from hand,
                 // discarded, and play count is recorded automatically.
                 gameManager.playActionCard(rentCard);
+                if (gameManager.getPlayedCardsThisTurn() == playedBefore && !gameManager.hasWinner()) {
+                    restoreFailedAnimatedTableAction();
+                    updateUI();
+                    return;
+                }
                 selectedHandCard = null;
                 updateUI();
                 broadcastStateIfHost();
             } catch (Exception e) {
                 // Ensure UI is refreshed even if the action fails
+                restoreFailedAnimatedTableAction();
                 updateUI();
                 showError("Action failed: " + e.getMessage());
             }
@@ -2915,6 +2930,8 @@ public class GameController {
                 updateUI();
                 broadcastStateIfHost();
             } catch (Exception e) {
+                restoreFailedAnimatedTableAction();
+                updateUI();
                 showError("Operation failed: " + e.getMessage());
             }
         });
@@ -2949,6 +2966,8 @@ public class GameController {
                     updateUI();
                     broadcastStateIfHost();
                 } catch (Exception e) {
+                    restoreFailedAnimatedTableAction();
+                    updateUI();
                     showError("Operation failed: " + e.getMessage());
                 }
             });
@@ -3076,6 +3095,12 @@ public class GameController {
             }
         });
         seq.play();
+    }
+
+    private void restoreFailedAnimatedTableAction() {
+        latestTableActionCard = null;
+        latestTableActionTitle = "Latest Action";
+        renderCurrentTurnAction();
     }
 
     private String describeTableAction(javafx.scene.Node targetNode) {
@@ -3691,11 +3716,18 @@ public class GameController {
 
     // ---------------- 4. Helper methods ----------------
     public void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle("Notice");
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        Runnable displayTask = () -> {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Notice");
+            alert.setHeaderText(null);
+            alert.setContentText(message);
+            alert.show();
+        };
+        if (Platform.isFxApplicationThread()) {
+            Platform.runLater(displayTask);
+        } else {
+            Platform.runLater(displayTask);
+        }
     }
 
     // Client-side handling for payment request
