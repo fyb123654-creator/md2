@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <rect width="1200" height="760" fill="#f8fafc"/>
+  <text x="600" y="50" text-anchor="middle" font-size="30" font-family="Arial" font-weight="bold" fill="#0f172a">Simplified Use Case View</text>
+  <rect x="250" y="100" width="700" height="580" rx="22" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
+  <text x="600" y="135" text-anchor="middle" font-size="24" font-family="Arial" font-weight="bold" fill="#334155">Monopoly Deal Software System</text>
+  <g font-family="Arial" font-size="19" fill="#0f172a" text-anchor="middle">
+    <ellipse cx="530" cy="210" rx="150" ry="34" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/><text x="530" y="216">Start Local Game</text>
+    <ellipse cx="700" cy="280" rx="150" ry="34" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/><text x="700" y="286">Host Online Room</text>
+    <ellipse cx="500" cy="320" rx="150" ry="34" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/><text x="500" y="326">Join Room / Ready Up</text>
+    <ellipse cx="690" cy="390" rx="165" ry="34" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="690" y="396">Play Cards and Manage Assets</text>
+    <ellipse cx="480" cy="430" rx="150" ry="34" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="480" y="436">View Event Log / Chat</text>
+    <ellipse cx="700" cy="500" rx="155" ry="34" fill="#fef3c7" stroke="#d97706" stroke-width="2"/><text x="700" y="506">Synchronise Game State</text>
+    <ellipse cx="520" cy="560" rx="175" ry="34" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/><text x="520" y="566">Run Tests and Validate Rules</text>
+  </g>
+  <g stroke="#475569" stroke-width="2.5" fill="none">
+    <line x1="120" y1="215" x2="380" y2="210"/><line x1="120" y1="230" x2="350" y2="320"/><line x1="120" y1="245" x2="525" y2="430"/>
+    <line x1="1080" y1="285" x2="850" y2="280"/><line x1="1080" y1="300" x2="865" y2="390"/><line x1="1080" y1="315" x2="855" y2="500"/>
+    <line x1="120" y1="260" x2="345" y2="560"/>
+  </g>
+  <g font-family="Arial" fill="#0f172a">
+    <circle cx="120" cy="185" r="18" fill="#cbd5e1"/><line x1="120" y1="203" x2="120" y2="255" stroke="#0f172a" stroke-width="3"/><line x1="90" y1="220" x2="150" y2="220" stroke="#0f172a" stroke-width="3"/><line x1="120" y1="255" x2="95" y2="295" stroke="#0f172a" stroke-width="3"/><line x1="120" y1="255" x2="145" y2="295" stroke="#0f172a" stroke-width="3"/><text x="120" y="330" text-anchor="middle" font-size="22" font-weight="bold">Player</text>
+    <circle cx="1080" cy="255" r="18" fill="#cbd5e1"/><line x1="1080" y1="273" x2="1080" y2="325" stroke="#0f172a" stroke-width="3"/><line x1="1050" y1="290" x2="1110" y2="290" stroke="#0f172a" stroke-width="3"/><line x1="1080" y1="325" x2="1055" y2="365" stroke="#0f172a" stroke-width="3"/><line x1="1080" y1="325" x2="1105" y2="365" stroke="#0f172a" stroke-width="3"/><text x="1080" y="400" text-anchor="middle" font-size="22" font-weight="bold">Host / Remote Client</text>
+  </g>
+</svg>
