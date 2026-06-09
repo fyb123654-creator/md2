@@ -190,15 +190,19 @@ public class GameClient {
                 break;
             case REQUIRE_PAYMENT:
                 if (listener != null) {
-                    String[] parts = message.getContent().split(":");
-                    listener.onRequirePayment(Integer.parseInt(parts[0]), parts[1]);
+                    String[] parts = message.getContent().split(":", 2);
+                    String amountText = parts.length > 0 ? parts[0] : "0";
+                    String collector = parts.length > 1 ? parts[1] : "";
+                    listener.onRequirePayment(Integer.parseInt(amountText), collector);
                 }
                 break;
 
             case ASK_JUST_SAY_NO:
                 if (listener != null) {
-                    String[] parts = message.getContent().split(":");
-                    listener.onAskJustSayNo(parts[0], parts[1]);
+                    String[] parts = message.getContent().split(":", 2);
+                    String source = parts.length > 0 ? parts[0] : "";
+                    String action = parts.length > 1 ? parts[1] : "";
+                    listener.onAskJustSayNo(source, action);
                 }
                 break;
 

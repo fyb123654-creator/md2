@@ -3,6 +3,7 @@ package com.mygame.app;
 import com.mygame.network.GameClient;
 import com.mygame.network.GameServer;
 import com.mygame.ui.GameController;
+import com.mygame.ui.OfflineLobbyController;
 import com.mygame.ui.NetworkGameController;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -91,7 +92,7 @@ public class GameApp extends Application {
         Button singlePlayerBtn = createMenuActionButton("Play Offline", "success");
         singlePlayerBtn.setOnAction(e -> {
             persistPlayerName(nameField);
-            startSinglePlayer();
+            showOfflineLobby();
         });
 
         Button onlineBtn = createMenuActionButton("Online Multiplayer", "primary");
@@ -171,6 +172,43 @@ public class GameApp extends Application {
             primaryStage.setScene(scene);
             primaryStage.show();
             Platform.runLater(() -> controller.initializeGame(0));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void showOfflineLobby() {
+        try {
+            LoadedView<OfflineLobbyController> view = ViewLoader.load("/OfflineLobbyView.fxml");
+            Parent root = view.getRoot();
+            OfflineLobbyController controller = view.getController();
+            controller.setGameApp(this);
+
+            Scene scene = new Scene(root, 1220, 760);
+            applyTheme(scene);
+            primaryStage.setTitle("Monopoly Deal - Offline Lobby");
+            primaryStage.setScene(scene);
+            primaryStage.show();
+            Platform.runLater(this::ensureBgmPlaying);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void startOfflineGameFromLobby(int playerCount, List<String> names, List<Integer> avatarIds) {
+        try {
+            LoadedView<GameController> view = ViewLoader.load("/GameView.fxml");
+            Parent root = view.getRoot();
+            GameController controller = view.getController();
+            controller.setGameApp(this);
+            primaryStage.setOnCloseRequest(e -> controller.cleanup());
+
+            Scene scene = new Scene(root, 1440, 860);
+            applyTheme(scene);
+            primaryStage.setTitle("Monopoly Deal - Offline Game");
+            primaryStage.setScene(scene);
+            primaryStage.show();
+            Platform.runLater(() -> controller.initializeOfflineGame(playerCount, names, avatarIds));
         } catch (Exception e) {
             e.printStackTrace();
         }

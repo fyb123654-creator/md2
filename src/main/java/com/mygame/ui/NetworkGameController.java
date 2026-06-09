@@ -12,9 +12,10 @@ import javafx.animation.ScaleTransition;
 import javafx.fxml.FXML;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.*;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
+import javafx.geometry.Pos;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -25,7 +26,6 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Online lobby controller.
@@ -54,7 +54,7 @@ public class NetworkGameController {
     @FXML private Button endTurnButton;
     @FXML private Label turnInfoLabel;
     @FXML private VBox playerInfoBox;
-    @FXML private HBox playerListBox;
+    @FXML private FlowPane playerListBox;
     @FXML private VBox lobbyInfoPane;
     @FXML private StackPane lobbyPanelPane;
     @FXML private StackPane lobbySideArtPane;
@@ -271,7 +271,7 @@ public class NetworkGameController {
             hintLabel.setText("Click Create Game to choose the room size, or Join Game to enter an existing room.");
         }
         if (statusLabel != null) {
-            statusLabel.setText("Ready to connect...");
+            statusLabel.setText("Ready to connect");
         }
         if (backToMenuButton != null) {
             backToMenuButton.setText("Return to Menu");
@@ -390,7 +390,7 @@ public class NetworkGameController {
         try {
             int port = Integer.parseInt(portField.getText());
 
-            statusLabel.setText("Creating server...");
+            statusLabel.setText("Creating server");
             lobbyPlayers.clear();
             lobbyPlayers.add("Player1 (You)");
             refreshLobbyPlayerList();
@@ -414,10 +414,8 @@ public class NetworkGameController {
                 @Override
                 public void onClientConnected(String playerName) {
                     Platform.runLater(() -> {
-                        // Ignore synthetic callbacks
-                        if (!"RoomUpdate".equals(playerName)) {
-                            lobbyPlayers.add(playerName);
-                            refreshLobbyPlayerList();
+                        if (playerName != null && playerName.startsWith("RoomUpdate:")) {
+                            applyRoomUpdate(playerName.substring("RoomUpdate:".length()));
                         }
                         statusLabel.setText("Players connected: " + lobbyPlayers.size() + "/" + playerCount);
                         updateStartButtonState();
@@ -436,6 +434,15 @@ public class NetworkGameController {
                 @Override
                 public void onGameOver(String winner) {
                     Platform.runLater(() -> {
+                        if (winner != null && winner.startsWith("ABORTED:")) {
+                            GameController controller = GameController.getInstance();
+                            if (controller != null) {
+                                controller.handleRemoteGameOver(winner);
+                            } else {
+                                showError(winner.substring("ABORTED:".length()).trim());
+                            }
+                            return;
+                        }
                         statusLabel.setText("Game Over! Winner: " + winner);
                     });
                 }
@@ -476,7 +483,7 @@ public class NetworkGameController {
             String address = serverAddressField.getText();
             int port = Integer.parseInt(portField.getText());
 
-            statusLabel.setText("Connecting to " + address + ":" + port + "...");
+            statusLabel.setText("Connecting to " + address + ":" + port);
             lobbyPlayers.clear();
             refreshLobbyPlayerList();
             localReady = false;
@@ -497,7 +504,7 @@ public class NetworkGameController {
                 public void onConnected() {
                     Platform.runLater(() -> {
                         localPlayerIndex = gameClient.getAssignedPlayerIndex();
-                        statusLabel.setText("Connected as Player " + (localPlayerIndex + 1) + ". Waiting for the host to start the game...");
+                        statusLabel.setText("Connected as Player " + (localPlayerIndex + 1) + ". Waiting for the host to start the game");
                         if (hintLabel != null) {
                             hintLabel.setText("Click Ready. The host will Start when everyone is Ready.");
                         }
@@ -571,6 +578,15 @@ public class NetworkGameController {
                 @Override
                 public void onGameOver(String winner) {
                     Platform.runLater(() -> {
+                        if (winner != null && winner.startsWith("ABORTED:")) {
+                            GameController controller = GameController.getInstance();
+                            if (controller != null) {
+                                controller.handleRemoteGameOver(winner);
+                            } else {
+                                showError(winner.substring("ABORTED:".length()).trim());
+                            }
+                            return;
+                        }
                         statusLabel.setText("Game Over! Winner: " + winner);
                     });
                 }
@@ -698,9 +714,23 @@ public class NetworkGameController {
         for (int i = 0; i < parts.length; i++) {
             String p = parts[i];
             String[] kv = p.split("=");
-            String label = "Player " + (i + 1);
-            boolean ready = kv.length > 1 && "1".equals(kv[1]);
-            if (!isHost && i == 1) label += " (You)";
+            String seatLabel = "Player " + (i + 1);
+            String payload = kv.length > 1 ? kv[1] : "";
+            String name = seatLabel;
+            boolean ready = false;
+            if (!payload.isBlank()) {
+                String[] fields = payload.split("\\|", -1);
+                if (fields.length == 1) {
+                    ready = "1".equals(fields[0]);
+                } else {
+                    name = fields[0].isBlank() ? seatLabel : fields[0];
+                    ready = "1".equals(fields[fields.length - 1]);
+                }
+            }
+            String label = seatLabel + ": " + name;
+            if (i == localPlayerIndex) {
+                label += " (You)";
+            }
             lobbyPlayers.add(label + (ready ? " ✓" : ""));
         }
         refreshLobbyPlayerList();
@@ -712,8 +742,25 @@ public class NetworkGameController {
         playerInfoBox.setVisible(true);
         playerListBox.getChildren().clear();
         for (String p : lobbyPlayers) {
-            Label chip = new Label(p);
+            boolean ready = p != null && p.endsWith(" ✓");
+            String text = ready ? p.substring(0, p.length() - 2) : p;
+            HBox chip = new HBox(8);
+            chip.setAlignment(Pos.CENTER_LEFT);
             chip.getStyleClass().add("chip");
+
+            Label textLabel = new Label(text == null ? "" : text);
+            textLabel.setWrapText(true);
+            textLabel.setTextOverrun(OverrunStyle.CLIP);
+            textLabel.setMinWidth(0);
+            textLabel.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(textLabel, Priority.ALWAYS);
+            chip.getChildren().add(textLabel);
+
+            if (ready) {
+                Label check = new Label("✓");
+                check.getStyleClass().add("ready-check");
+                chip.getChildren().add(check);
+            }
             playerListBox.getChildren().add(chip);
         }
     }

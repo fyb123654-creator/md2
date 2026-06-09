@@ -52,7 +52,7 @@
                         <Label text="Team Chat" styleClass="section-title"/>
                         <TextArea fx:id="chatArea" editable="false" wrapText="true" prefRowCount="7"/>
                         <HBox spacing="8" alignment="CENTER">
-                            <TextField fx:id="chatInput" promptText="Type a message..." HBox.hgrow="ALWAYS"/>
+                            <TextField fx:id="chatInput" promptText="Type a message" HBox.hgrow="ALWAYS"/>
                             <Button fx:id="sendChatButton" text="Send" styleClass="button primary" onAction="#onSendChatClicked"/>
                         </HBox>
                     </VBox>
@@ -66,7 +66,7 @@
                                     <Insets top="18"/>
                                 </VBox.margin>
                                 <VBox spacing="12" alignment="CENTER">
-                                    <Label fx:id="actingPlayerLabel" text="Waiting for action..." styleClass="table-subtitle"/>
+                                    <Label fx:id="actingPlayerLabel" text="Waiting for action" styleClass="table-subtitle table-subtitle-dark"/>
                                     <HBox alignment="CENTER" spacing="16">
                                         <StackPane fx:id="drawPilePane" styleClass="pile">
                                             <Label fx:id="drawPileCountLabel" text="0" styleClass="pile-count"/>
@@ -80,7 +80,7 @@
                                                 </VBox>
                                                 <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card">
                                                     <Label text="Property" styleClass="zone-label"/>
-                                                    <HBox fx:id="tableCurrentPropertyBox" alignment="CENTER" spacing="8"/>
+                                                    <FlowPane fx:id="tableCurrentPropertyBox" hgap="8" vgap="8" prefWrapLength="140"/>
                                                 </VBox>
                                                 <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card action-zone-card">
                                                     <Label text="Action" styleClass="zone-label"/>
@@ -134,7 +134,7 @@
                         <Button fx:id="helpButton" text="Game Rules" onAction="#onHelpClicked" styleClass="button primary side-action"/>
                         <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" styleClass="button success side-action primary-side-action"/>
                         <Button fx:id="discardModeButton" text="Discard" onAction="#onDiscardModeClicked" styleClass="button side-action"/>
-                        <Label fx:id="loadingLabel" text="Waiting for player action..." wrapText="true" styleClass="loading-label"/>
+                        <Label fx:id="loadingLabel" text="Waiting for player action" wrapText="true" styleClass="loading-label"/>
                     </VBox>
                 </VBox>
                 </HBox>

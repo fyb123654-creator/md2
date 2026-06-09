@@ -64,6 +64,15 @@ public class OnlineGameController {
             @Override
             public void onGameOver(String winner) {
                 Platform.runLater(() -> {
+                    if (winner != null && winner.startsWith("ABORTED:")) {
+                        GameController controller = GameController.getInstance();
+                        if (controller != null) {
+                            controller.handleRemoteGameOver(winner);
+                        } else {
+                            showError(winner.substring("ABORTED:".length()).trim());
+                        }
+                        return;
+                    }
                     turnInfoLabel.setText("Game Over! Winner: " + winner);
                     isMyTurn = false;
                     endTurnButton.setDisable(true);
@@ -72,7 +81,7 @@ public class OnlineGameController {
         });
 
         gameServer.start();
-        turnInfoLabel.setText("Server started on port " + port + ". Waiting for players...");
+        turnInfoLabel.setText("Server started on port " + port + ". Waiting for players");
     }
 
     public void startAsClient(String address, int port) {
@@ -84,7 +93,7 @@ public class OnlineGameController {
             public void onConnected() {
                 Platform.runLater(() -> {
                     localPlayerIndex = gameClient.getAssignedPlayerIndex();
-                    turnInfoLabel.setText("Connected as Player " + (localPlayerIndex + 1) + ". Waiting for game...");
+                    turnInfoLabel.setText("Connected as Player " + (localPlayerIndex + 1) + ". Waiting for game");
                 });
             }
 
@@ -122,6 +131,15 @@ public class OnlineGameController {
             @Override
             public void onGameOver(String winner) {
                 Platform.runLater(() -> {
+                    if (winner != null && winner.startsWith("ABORTED:")) {
+                        GameController controller = GameController.getInstance();
+                        if (controller != null) {
+                            controller.handleRemoteGameOver(winner);
+                        } else {
+                            showError(winner.substring("ABORTED:".length()).trim());
+                        }
+                        return;
+                    }
                     turnInfoLabel.setText("Game Over! Winner: " + winner);
                     isMyTurn = false;
                     endTurnButton.setDisable(true);

@@ -602,7 +602,7 @@ public class CardView extends Button {
 
         if (name.length() > 20) {
 
-            return name.substring(0, 17) + "...";
+            return name.substring(0, 17) + " (more)";
         }
 
         return name;

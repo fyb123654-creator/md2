@@ -34,9 +34,11 @@ public class GameServer {
     private GameManager gameManager;
     private int port;
     private boolean running;
+    private volatile boolean abortBroadcasted;
     private int expectedPlayerCount;
     private OnGameStateChangeListener listener;
     private volatile GameStateData lastBroadcastState;
+    private final ClientHandler hostHandler;
     private final boolean[] readyFlags;
     private final String[] playerNames;
     private final int[] playerAvatarIds;
@@ -118,6 +120,15 @@ public class GameServer {
         this.readyFlags[0] = false;
         this.playerNames[0] = (hostName == null || hostName.isBlank()) ? "Player1" : hostName.trim();
         this.playerAvatarIds[0] = Math.max(0, hostAvatarId);
+        this.hostHandler = new ClientHandler(null, 0) {
+            @Override
+            public void send(NetworkProtocol message) {
+                if (message.getType() == NetworkProtocol.MessageType.ERROR) {
+                    javafx.application.Platform.runLater(() ->
+                            GameController.getInstance().showError(message.getErrorMessage()));
+                }
+            }
+        };
     }
 
     public void setListener(OnGameStateChangeListener listener) {
@@ -227,13 +238,29 @@ public class GameServer {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < expectedPlayerCount; i++) {
             if (i > 0) sb.append(",");
-            sb.append("P").append(i + 1).append("=").append(readyFlags[i] ? "1" : "0");
+            String name = (i >= 0 && i < playerNames.length) ? playerNames[i] : null;
+            if (name == null || name.isBlank()) {
+                name = "Player" + (i + 1);
+            }
+            name = sanitizeRoomUpdateField(name);
+            sb.append("P")
+                    .append(i + 1)
+                    .append("=")
+                    .append(name)
+                    .append("|")
+                    .append(readyFlags[i] ? "1" : "0");
         }
         broadcast(NetworkProtocol.roomUpdate(sb.toString()));
         if (listener != null) {
-            // Optionally push state to host UI too
-            listener.onClientConnected("RoomUpdate");
+            listener.onClientConnected("RoomUpdate:" + sb);
         }
+    }
+
+    private String sanitizeRoomUpdateField(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("|", "_").replace(",", "_").trim();
     }
 
     public void broadcastGameState() {
@@ -249,6 +276,22 @@ public class GameServer {
         }
     }
 
+    private void abortGame(String reason) {
+        if (abortBroadcasted) {
+            return;
+        }
+        abortBroadcasted = true;
+        clearSinglePaymentState();
+        clearBatchState();
+        clearActionJustSayNoState();
+        String msg = "ABORTED:" + (reason == null ? "Game ended." : reason);
+        broadcast(NetworkProtocol.gameOver(msg));
+        if (listener != null) {
+            listener.onGameOver(msg);
+        }
+        stop();
+    }
+
     public void handleHostLeaving() {
         if (gameManager == null) {
             stop();
@@ -259,27 +302,7 @@ public class GameServer {
             return;
         }
         if (gameManager.isGameStarted()) {
-            if (!gameManager.getPlayersView().isEmpty()) {
-                PlayerManagement host = gameManager.getPlayersView().get(0);
-                if (!host.isEliminated()) {
-                    List<Card> returned = host.removeAllCards();
-                    CardManager cm = gameManager.getCardManager();
-                    if (cm != null) {
-                        for (Card c : returned) {
-                            cm.addToTopOfDrawPile(c);
-                        }
-                    }
-                    gameManager.eliminatePlayer(0);
-                    clearSinglePaymentState();
-                    clearBatchState();
-                    clearActionJustSayNoState();
-                }
-            }
-            broadcastGameState();
-            if (!gameManager.isGameOver()) {
-                broadcast(NetworkProtocol.error("Host left the game."));
-                stop();
-            }
+            abortGame("Host left the game.");
             return;
         }
 
@@ -328,49 +351,12 @@ public class GameServer {
         synchronized (clientsLock) {
             removed = clientsByIndex.remove(index) != null;
         }
-        if (removed && gameManager != null && gameManager.isGameStarted() && !gameManager.isGameOver()) {
-            if (index < gameManager.getPlayersView().size()) {
-                PlayerManagement leaver = gameManager.getPlayersView().get(index);
-                if (!leaver.isEliminated()) {
-                    boolean continueBatch = false;
-                    
-                    if (isWaitingForJsnAction && pendingJsnResponder != null && leaver.getPlayerId().equals(pendingJsnResponder.getPlayerId())) {
-                        Runnable callback = pendingJsnActionCanceled ? pendingJsnCancelCallback : pendingJsnSuccessCallback;
-                        clearActionJustSayNoState();
-                        if (callback != null) callback.run();
-                    } else {
-                        clearActionJustSayNoState();
-                    }
-                    
-                    if ((isWaitingForPayment || isWaitingForJsn) && pendingVictimId != null && leaver.getPlayerId().equals(pendingVictimId)) {
-                        PlayerManagement collector = findPlayerById(pendingCollectorId);
-                        if (collector != null && !collector.isEliminated()) {
-                            leaver.transferAllAssetsTo(collector);
-                        }
-                        clearSinglePaymentState();
-                        continueBatch = true;
-                    } else {
-                        clearSinglePaymentState();
-                        clearBatchState();
-                    }
-
-                    List<Card> returned = leaver.removeAllCards();
-                    CardManager cm = gameManager.getCardManager();
-                    if (cm != null) {
-                        for (Card c : returned) {
-                            cm.addToTopOfDrawPile(c);
-                        }
-                    }
-                    gameManager.eliminatePlayer(index);
-                    
-                    if (continueBatch && pendingPaymentQueue != null) {
-                        currentPaymentIndex++;
-                        processNextPaymentInBatch();
-                    } else {
-                        broadcastGameState();
-                    }
-                }
-            }
+        if (removed && gameManager != null && gameManager.isGameStarted() && !gameManager.isGameOver() && running) {
+            String name = (index >= 0 && index < playerNames.length && playerNames[index] != null && !playerNames[index].isBlank())
+                    ? playerNames[index]
+                    : "Player " + (index + 1);
+            abortGame(name + " disconnected.");
+            return;
         }
         if (removed && index < readyFlags.length) {
             readyFlags[index] = false;
@@ -381,7 +367,7 @@ public class GameServer {
         if (removed && index < playerAvatarIds.length) {
             playerAvatarIds[index] = 0;
         }
-        if (removed) {
+        if (removed && running && !abortBroadcasted) {
             broadcastRoomUpdate();
         }
     }
@@ -391,16 +377,118 @@ public class GameServer {
 
     // Entry for host direct invocation
     public void processHostAction(String action) {
-        ClientHandler hostHandler = new ClientHandler(null, 0) {
-            @Override
-            public void send(NetworkProtocol message) {
-                if (message.getType() == NetworkProtocol.MessageType.ERROR) {
-                    javafx.application.Platform.runLater(() ->
-                            GameController.getInstance().showError(message.getErrorMessage()));
+        hostHandler.processPlayerAction(action);
+    }
+
+    public void processSystemTimeout(int expectedTurnIndex) {
+        if (gameManager == null || !gameManager.isGameStarted() || gameManager.isGameOver()) {
+            return;
+        }
+        if (expectedTurnIndex >= 0 && gameManager.getCurrentPlayerIndex() != expectedTurnIndex) {
+            return;
+        }
+
+        if (isWaitingForJsnAction && pendingJsnResponder != null) {
+            int responderIndex = findPlayerIndexById(pendingJsnResponder.getPlayerId());
+            if (responderIndex >= 0) {
+                processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
+            }
+            return;
+        }
+
+        if (isWaitingForJsn && pendingPaymentJsnResponderId != null) {
+            int responderIndex = findPlayerIndexById(pendingPaymentJsnResponderId);
+            if (responderIndex >= 0) {
+                processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
+            }
+            return;
+        }
+
+        if (isWaitingForPayment && pendingVictimId != null) {
+            int victimIndex = findPlayerIndexById(pendingVictimId);
+            PlayerManagement victim = findPlayerById(pendingVictimId);
+            if (victimIndex >= 0 && victim != null) {
+                String selection = buildAutoPaymentSelection(victim, pendingPaymentAmount);
+                processSystemAction(victimIndex, "PAYMENT_RESPONSE:" + selection);
+            }
+            return;
+        }
+
+        int currentIndex = gameManager.getCurrentPlayerIndex();
+        PlayerManagement current = gameManager.getPlayersView().get(currentIndex);
+        int overflow = Math.max(0, current.getHandCardCount() - PlayerManagement.MAX_HAND_SIZE);
+        if (overflow > 0) {
+            List<Card> hand = new ArrayList<>(current.getHandCardsView());
+            Collections.shuffle(hand);
+            for (int i = 0; i < overflow && i < hand.size(); i++) {
+                Card c = hand.get(i);
+                if (c != null && c.getId() != null) {
+                    processSystemAction(currentIndex, "DISCARD:" + c.getId());
                 }
             }
+            return;
+        }
+        processSystemAction(currentIndex, "END_TURN");
+    }
+
+    private void processSystemAction(int playerIndex, String action) {
+        ClientHandler handler = new ClientHandler(null, playerIndex) {
+            @Override
+            public void send(NetworkProtocol message) {
+            }
         };
-        hostHandler.processPlayerAction(action);
+        handler.processPlayerAction(action);
+    }
+
+    private int findPlayerIndexById(String playerId) {
+        if (playerId == null || playerId.isBlank()) {
+            return -1;
+        }
+        List<PlayerManagement> players = gameManager.getPlayersView();
+        for (int i = 0; i < players.size(); i++) {
+            if (playerId.equals(players.get(i).getPlayerId())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String buildAutoPaymentSelection(PlayerManagement victim, int amount) {
+        if (victim == null) {
+            return "NONE";
+        }
+        if (amount <= 0) {
+            return "";
+        }
+        List<Card> assets = new ArrayList<>();
+        assets.addAll(victim.getBankCardsView());
+        for (PropertyZone zone : victim.getPropertyZonesView().values()) {
+            if (zone == null) continue;
+            if (zone.getPropertiesView() != null) {
+                assets.addAll(zone.getPropertiesView());
+            }
+            if (zone.getHouse() != null) assets.add(zone.getHouse());
+            if (zone.getHotel() != null) assets.add(zone.getHotel());
+        }
+        int total = 0;
+        for (Card c : assets) {
+            if (c != null) {
+                total += c.getValue();
+            }
+        }
+        if (total < amount) {
+            return "NONE";
+        }
+        Collections.shuffle(assets);
+        List<String> selectedIds = new ArrayList<>();
+        int selectedValue = 0;
+        for (Card c : assets) {
+            if (c == null || c.getId() == null) continue;
+            selectedIds.add(c.getId());
+            selectedValue += c.getValue();
+            if (selectedValue >= amount) break;
+        }
+        return String.join(",", selectedIds);
     }
 
     // Batch payment: initialize queue
@@ -443,6 +531,27 @@ public class GameServer {
         pendingActionName = actionName;
         pendingPaymentJsnResponderId = victim.getPlayerId();
         pendingPaymentCanceledByJsn = false;
+        if (findJustSayNoCard(victim) == null) {
+            int totalAssetValue = victim.calculateAssetTotalValue();
+            if (totalAssetValue <= pendingPaymentAmount) {
+                victim.transferAllAssetsTo(collector);
+                clearSinglePaymentState();
+                if (pendingPaymentQueue != null) {
+                    currentPaymentIndex++;
+                    processNextPaymentInBatch();
+                } else {
+                    broadcastGameState();
+                }
+            } else {
+                isWaitingForJsn = false;
+                isWaitingForPayment = true;
+                NetworkProtocol req = new NetworkProtocol();
+                req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
+                req.setContent(pendingPaymentAmount + ":" + collector.getName());
+                sendToPlayer(pendingVictimId, req);
+            }
+            return;
+        }
         NetworkProtocol req = new NetworkProtocol();
         req.setType(NetworkProtocol.MessageType.ASK_JUST_SAY_NO);
         req.setContent(collector.getName() + ":" + actionName);
@@ -454,11 +563,15 @@ public class GameServer {
         if (hostPlayer.getPlayerId().equals(targetPlayerId)) {
             javafx.application.Platform.runLater(() -> {
                 if (msg.getType() == NetworkProtocol.MessageType.ASK_JUST_SAY_NO) {
-                    String[] parts = msg.getContent().split(":");
-                    GameController.getInstance().handleAskJustSayNo(parts[0], parts[1]);
+                    String[] parts = msg.getContent().split(":", 2);
+                    String source = parts.length > 0 ? parts[0] : "";
+                    String action = parts.length > 1 ? parts[1] : "";
+                    GameController.getInstance().handleAskJustSayNo(source, action);
                 } else if (msg.getType() == NetworkProtocol.MessageType.REQUIRE_PAYMENT) {
-                    String[] parts = msg.getContent().split(":");
-                    GameController.getInstance().handleRequirePayment(Integer.parseInt(parts[0]), parts[1]);
+                    String[] parts = msg.getContent().split(":", 2);
+                    String amountText = parts.length > 0 ? parts[0] : "0";
+                    String collector = parts.length > 1 ? parts[1] : "";
+                    GameController.getInstance().handleRequirePayment(Integer.parseInt(amountText), collector);
                 }
             });
             return;
@@ -480,17 +593,20 @@ public class GameServer {
     }
 
     private Card findCardInHand(PlayerManagement player, String cardId) {
+        if (player == null || cardId == null) {
+            return null;
+        }
         for (Card c : player.getHandCardsView()) {
-            if (c.getId().equals(cardId)) return c;
+            if (c != null && cardId.equals(c.getId())) return c;
         }
         return null;
     }
 
     private Card findPropertyCardById(PlayerManagement player, String cardId) {
-        if (player == null) return null;
+        if (player == null || cardId == null) return null;
         for (PropertyZone zone : player.getPropertyZonesView().values()) {
             for (PropertyCard pc : zone.getPropertiesView()) {
-                if (pc.getId().equals(cardId)) return pc;
+                if (pc != null && cardId.equals(pc.getId())) return pc;
             }
         }
         return null;
@@ -530,7 +646,7 @@ public class GameServer {
                     LOGGER.log(Level.WARNING, "Failed to initialize streams for player " + playerIndex, e);
                 }
             }
-            if (playerIndex >= 0 && playerIndex < readyFlags.length) {
+            if (socket != null && playerIndex >= 0 && playerIndex < readyFlags.length) {
                 readyFlags[playerIndex] = false;
             }
         }
@@ -660,7 +776,7 @@ public class GameServer {
             String cardId = parts.length > 1 ? parts[1] : null;
             if ("YES".equals(answer) && cardId != null) {
                 Card card = findCardInHand(responder, cardId);
-                if (card != null) {
+                if (card instanceof JustSayNoCard) {
                     responder.removeFromHand(card);
                     gameManager.getCardManager().playCard(card);
 
@@ -672,6 +788,8 @@ public class GameServer {
                         broadcastGameState();
                         return;
                     }
+                } else {
+                    send(NetworkProtocol.error("Invalid card for Just Say No"));
                 }
             }
 
@@ -783,17 +901,24 @@ public class GameServer {
         }
 
         private Card findAssetCardById(PlayerManagement player, String cardId) {
+            if (player == null || cardId == null) {
+                return null;
+            }
             for (Card c : player.getBankCardsView()) {
-                if (c.getId().equals(cardId)) return c;
+                if (c != null && cardId.equals(c.getId())) return c;
             }
             for (PropertyZone zone : player.getPropertyZonesView().values()) {
                 for (PropertyCard pc : zone.getPropertiesView()) {
-                    if (pc.getId().equals(cardId)) return pc;
+                    if (pc != null && cardId.equals(pc.getId())) return pc;
                 }
-                if (zone.getHouse() != null && zone.getHouse().getId().equals(cardId)) return zone.getHouse();
-                if (zone.getHotel() != null && zone.getHotel().getId().equals(cardId)) return zone.getHotel();
+                if (zone.getHouse() != null && cardId.equals(zone.getHouse().getId())) return zone.getHouse();
+                if (zone.getHotel() != null && cardId.equals(zone.getHotel().getId())) return zone.getHotel();
             }
             return null;
+        }
+
+        private void sendCurrentGameState() {
+            send(NetworkProtocol.gameState(GameStateData.fromGameManager(gameManager)));
         }
 
         // ========== Core: handle player actions ==========
@@ -817,6 +942,7 @@ public class GameServer {
                 String[] parts = action.split(":");
                 if (parts.length < 2) {
                     send(NetworkProtocol.error("Invalid action format"));
+                    sendCurrentGameState();
                     return;
                 }
 
@@ -830,12 +956,14 @@ public class GameServer {
 
                 if (!"DISCARD".equals(actionType) && !gameManager.canCurrentPlayerPlayCard()) {
                     send(NetworkProtocol.error("You have already played the maximum number of cards this turn"));
+                    sendCurrentGameState();
                     return;
                 }
 
                 Card targetCard = findCardInHand(currentPlayer, cardId);
                 if (targetCard == null) {
                     send(NetworkProtocol.error("Card not found"));
+                    sendCurrentGameState();
                     return;
                 }
 
@@ -895,7 +1023,7 @@ public class GameServer {
                     return;
                 }
                 Card jsnCard = findCardInHand(currentPlayer, parts[2]);
-                if (jsnCard != null) {
+                if (jsnCard instanceof JustSayNoCard) {
                     currentPlayer.removeFromHand(jsnCard);
                     gameManager.getCardManager().playCard(jsnCard);
 
@@ -912,6 +1040,8 @@ public class GameServer {
                         broadcastGameState();
                         return;
                     }
+                } else {
+                    send(NetworkProtocol.error("Invalid card for Just Say No"));
                 }
                 if (pendingPaymentCanceledByJsn) {
                     clearSinglePaymentState();

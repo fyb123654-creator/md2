@@ -29,6 +29,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
@@ -41,6 +42,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -60,7 +62,6 @@ import javafx.animation.ScaleTransition;
 import javafx.animation.Timeline;
 import javafx.animation.TranslateTransition;
 import javafx.util.Duration;
-import javafx.application.Platform;
 import javafx.geometry.Bounds;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
@@ -76,7 +77,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public class   GameController {
+public class GameController {
     private static final int TURN_TIME_LIMIT_SECONDS = 180;
     private static final int TURN_HINT_WARNING_SECONDS = 20;
     private static final int TURN_ALERT_SECONDS = 10;
@@ -109,7 +110,7 @@ public class   GameController {
     @FXML
     private HBox tableCurrentBankBox;
     @FXML
-    private HBox tableCurrentPropertyBox;
+    private FlowPane tableCurrentPropertyBox;
     @FXML
     private StackPane chatImagePane;
     @FXML
@@ -194,6 +195,8 @@ public class   GameController {
     private boolean discardNoticeShown = false;
     private String defaultEndTurnText = "End Turn";
     private volatile int lastServerLocalHandCount = -1;
+    private volatile int lastServerPlayedCardsThisTurn = 0;
+    private volatile int lastServerMaxPlayCountPerTurn = GameManager.MAX_PLAY_COUNT_PER_TURN;
     private final Set<String> lastRenderedHandCardIds = new HashSet<>();
     private CardView hoveredHandCard;
     private boolean handDrawerExpanded = false;
@@ -234,7 +237,7 @@ public class   GameController {
             actingPlayerLabel.setText("Table ready");
         }
         if (loadingLabel != null) {
-            loadingLabel.setText("Waiting for player action...");
+            loadingLabel.setText("Waiting for player action");
         }
         if (discardModeButton != null) {
             discardModeButton.setDisable(true);
@@ -642,7 +645,7 @@ public class   GameController {
             if (discardMode) {
                 loadingLabel.setText("Discard mode is active.");
             } else if (isOnlineMode && !isMyTurn) {
-                loadingLabel.setText("Waiting for the current player...");
+                loadingLabel.setText("Waiting for the current player");
             } else {
                 loadingLabel.setText("You can play, bank, place, or end your turn.");
             }
@@ -766,14 +769,18 @@ public class   GameController {
     }
 
     private void handleTurnTimeout() {
-        if (!isMyTurn) {
-            return;
-        }
         if (gameManager != null && gameManager.hasWinner()) {
             return;
         }
+        if (isOnlineMode && isHost() && gameServer != null) {
+            gameServer.processSystemTimeout(trackedTurnIndex);
+            return;
+        }
+        if (isOnlineMode && !isMyTurn) {
+            return;
+        }
         if (loadingLabel != null) {
-            loadingLabel.setText("Time expired. Auto-ending turn...");
+            loadingLabel.setText("Time expired. Auto-ending turn");
         }
         if (hintLabel != null) {
             hintLabel.setText("Time expired. The turn is being closed automatically.");
@@ -941,19 +948,19 @@ public class   GameController {
             tableCurrentPropertyBox.getChildren().add(buildTablePlaceholderChip("No properties"));
             return;
         }
-        boolean hasProperty = false;
+        List<Color> colors = new ArrayList<>();
         for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
-            if (player.getPropertyCount(entry.getKey()) <= 0) {
-                continue;
-            }
-            hasProperty = true;
-            tableCurrentPropertyBox.getChildren().add(buildPropertyChip(entry.getKey(), buildPropertySetTitle(player, entry.getKey(), player.getPropertyCount(entry.getKey()))));
-            if (tableCurrentPropertyBox.getChildren().size() >= 3) {
-                break;
+            if (player.getPropertyCount(entry.getKey()) > 0) {
+                colors.add(entry.getKey());
             }
         }
-        if (!hasProperty) {
+        if (colors.isEmpty()) {
             tableCurrentPropertyBox.getChildren().add(buildTablePlaceholderChip("No properties"));
+            return;
+        }
+        for (Color color : colors) {
+            int count = player.getPropertyCount(color);
+            tableCurrentPropertyBox.getChildren().add(buildPropertyChip(color, buildPropertySetTitle(player, color, count)));
         }
     }
 
@@ -968,6 +975,7 @@ public class   GameController {
     private Label buildTablePlaceholderChip(String text) {
         Label chip = new Label(text);
         chip.getStyleClass().addAll("summary-chip", "table-summary-chip");
+        chip.setTextOverrun(OverrunStyle.CLIP);
         return chip;
     }
 
@@ -1063,8 +1071,7 @@ public class   GameController {
         }
 
         if (isOnlineMode) {
-            if (!isMyTurn || discardMode) {
-                showError("It's not your turn.");
+            if (!ensureOnlinePlayAllowed()) {
                 return false;
             }
             if (target == PlayTarget.BANK) {
@@ -1079,6 +1086,11 @@ public class   GameController {
         }
 
         if (gameManager == null || !gameManager.canCurrentPlayerPlayCard()) {
+            if (gameManager != null) {
+                int played = gameManager.getPlayedCardsThisTurn();
+                int max = GameManager.MAX_PLAY_COUNT_PER_TURN;
+                showError("You have already played " + played + "/" + max + " cards this turn. End your turn.");
+            }
             return false;
         }
         if (target == PlayTarget.BANK) {
@@ -1229,6 +1241,52 @@ public class   GameController {
             } else if (gameManager != null) {
                 updateFromServerState(GameStateData.fromGameManager(gameManager));
             }
+        }
+    }
+
+    public void initializeOfflineGame(int playerCount, List<String> names, List<Integer> avatarIds) {
+        if (isOnlineMode) {
+            return;
+        }
+        if (playerCount < 2 || playerCount > 5) {
+            showError("Invalid player count");
+            return;
+        }
+        if (names == null || names.size() != playerCount) {
+            showError("Invalid player names");
+            return;
+        }
+        if (avatarIds == null || avatarIds.size() != playerCount) {
+            showError("Invalid avatars");
+            return;
+        }
+
+        chatLines.clear();
+        if (chatArea != null) {
+            chatArea.clear();
+        }
+
+        discardMode = false;
+        selectedHandCard = null;
+        localPlayerIndex = 0;
+        if (navBackButton != null) {
+            navBackButton.setText("Exit to Menu");
+        }
+
+        interactor = new Interactor();
+
+        GameManager localManager = new GameManager();
+        localManager.setPlayerCount(playerCount, names);
+        for (int i = 0; i < localManager.getPlayersView().size(); i++) {
+            localManager.getPlayersView().get(i).setAvatarId(Math.max(0, avatarIds.get(i)));
+        }
+        localManager.startRound();
+        bindGameManager(localManager);
+
+        updateUI();
+        if (!AppSettings.getInstance().isOnboardingShown()) {
+            AppSettings.getInstance().setOnboardingShown(true);
+            onHelpClicked();
         }
     }
 
@@ -1410,6 +1468,8 @@ public class   GameController {
         isMyTurn = (state.getCurrentPlayerIndex() == localPlayerIndex);
         syncDisplayedTurnTimer(state.getCurrentPlayerIndex());
         updatePileCounts(state.getDrawPileCount(), state.getDiscardPileCount());
+        lastServerPlayedCardsThisTurn = state.getPlayedCardsThisTurn();
+        lastServerMaxPlayCountPerTurn = state.getMaxPlayCountPerTurn();
         int localHandCount = state.getPlayers().size() > localPlayerIndex
                 ? state.getPlayers().get(localPlayerIndex).getHandCards().size()
                 : 0;
@@ -1427,8 +1487,8 @@ public class   GameController {
         String currentPlayerName = state.getPlayers().size() > state.getCurrentPlayerIndex()
                 ? state.getPlayers().get(state.getCurrentPlayerIndex()).getPlayerName()
                 : "Player";
-        int remainingPlays = state.getMaxPlayCountPerTurn() - state.getPlayedCardsThisTurn();
-        turnInfoLabel.setText("Turn: " + currentPlayerName + " | Remaining plays: " + remainingPlays);
+        int remainingPlays = lastServerMaxPlayCountPerTurn - lastServerPlayedCardsThisTurn;
+        turnInfoLabel.setText("Turn: " + currentPlayerName + " | Played: " + lastServerPlayedCardsThisTurn + "/" + lastServerMaxPlayCountPerTurn);
         if (actingPlayerLabel != null) {
             actingPlayerLabel.setText(currentPlayerName + (isMyTurn ? " is playing now" : " is making a move"));
         }
@@ -1447,7 +1507,7 @@ public class   GameController {
             } else if (!isMyTurn) {
                 hintLabel.setText("Waiting for your turn.");
             } else if (remainingPlays <= 0) {
-                hintLabel.setText("No plays left. End your turn.");
+                hintLabel.setText("Played: " + lastServerPlayedCardsThisTurn + "/" + lastServerMaxPlayCountPerTurn + ". End your turn.");
             } else {
                 hintLabel.setText("Click a hand card to play it as action / bank / property.");
             }
@@ -1477,7 +1537,6 @@ public class   GameController {
     }
 
     private void updateCardDisabledState() {
-        // Update disabled state for all hand cards
         for (var node : myHandBox.getChildren()) {
             if (node instanceof CardView cardView) {
                 boolean shouldDisable = !isMyTurn;
@@ -1507,6 +1566,7 @@ public class   GameController {
 
         GameStateData.PlayerData localPlayerData = players.get(localPlayerIndex);
         myBankBox.getChildren().clear();
+        myBankBox.setSpacing(-54);
 
         for (GameStateData.CardData cardData : localPlayerData.getBankCards()) {
             Card card = cardData.toCard();
@@ -1516,6 +1576,7 @@ public class   GameController {
         }
 
         if (myBankBox.getChildren().isEmpty()) {
+            myBankBox.setSpacing(14);
             Label emptyView = new Label("No cards");
             emptyView.setStyle("-fx-text-fill: #666666;");
             myBankBox.getChildren().add(emptyView);
@@ -1547,6 +1608,7 @@ public class   GameController {
 
             HBox propertyRow = new HBox(8);
             propertyRow.setAlignment(Pos.CENTER_LEFT);
+            propertyRow.setSpacing(-54);
 
             for (GameStateData.CardData cardData : zoneData.getProperties()) {
                 Card card = cardData.toCard();
@@ -1608,7 +1670,7 @@ public class   GameController {
         // Online client may not have a local GameManager; keep UI in sync via DTO only
         if (isOnlineMode && !isHost() && gameManager == null) {
             updateClientInfo();
-            turnInfoLabel.setText("Waiting for server...");
+            turnInfoLabel.setText("Waiting for server");
             return;
         }
 
@@ -1625,7 +1687,9 @@ public class   GameController {
 
         updateClientInfo();
         String turnPlayerName = currentPlayer.getName();
-        turnInfoLabel.setText("Turn: " + turnPlayerName + " | Remaining plays: " + gameManager.getRemainingPlayCountThisTurn());
+        int played = gameManager.getPlayedCardsThisTurn();
+        int max = GameManager.MAX_PLAY_COUNT_PER_TURN;
+        turnInfoLabel.setText("Turn: " + turnPlayerName + " | Played: " + played + "/" + max);
         if (actingPlayerLabel != null) {
             actingPlayerLabel.setText(turnPlayerName + (isOnlineMode && !isMyTurn ? " is making a move" : " is on the table"));
         }
@@ -1644,7 +1708,7 @@ public class   GameController {
             } else if (isOnlineMode && !isMyTurn) {
                 hintLabel.setText("Waiting for your turn.");
             } else if (gameManager.getRemainingPlayCountThisTurn() <= 0) {
-                hintLabel.setText("No plays left. End your turn.");
+                hintLabel.setText("Played: " + played + "/" + max + ". End your turn.");
             } else {
                 hintLabel.setText("Click a hand card to play it as action / bank / property.");
             }
@@ -1742,6 +1806,7 @@ public class   GameController {
         VBox titleBox = new VBox(3);
         Label nameLabel = new Label(playerName == null || playerName.isBlank() ? "Player" : playerName);
         nameLabel.getStyleClass().add("compact-player-name");
+        nameLabel.setTextOverrun(OverrunStyle.CLIP);
         Label handLabel = new Label("Hand: " + handCount);
         handLabel.getStyleClass().add("compact-player-meta");
         titleBox.getChildren().addAll(nameLabel, handLabel);
@@ -1765,14 +1830,11 @@ public class   GameController {
             row.getChildren().add(buildSummaryChip("None"));
             return;
         }
-        int shown = Math.min(limit, cards.size());
-        for (int i = 0; i < shown; i++) {
+        row.setSpacing(-54);
+        for (int i = 0; i < cards.size(); i++) {
             CardView preview = new CardView(cards.get(i), true);
             preview.setDisable(true);
             row.getChildren().add(preview);
-        }
-        if (cards.size() > shown) {
-            row.getChildren().add(buildSummaryChip("+" + (cards.size() - shown)));
         }
     }
 
@@ -1814,15 +1876,38 @@ public class   GameController {
     private Label buildSummaryChip(String text) {
         Label chip = new Label(text);
         chip.getStyleClass().add("summary-chip");
+        chip.setTextOverrun(OverrunStyle.CLIP);
         return chip;
     }
 
     private Label buildPropertyChip(Color color, String tooltipText) {
-        Label chip = new Label(color.name());
+        Label chip = new Label(buildColorChipText(color));
         chip.getStyleClass().add("summary-chip");
         chip.setStyle("-fx-background-color: " + toSoftFxColor(color) + "; -fx-border-color: " + toFxColor(color) + ";");
+        chip.setTextOverrun(OverrunStyle.CLIP);
         installLabelTooltip(chip, tooltipText);
         return chip;
+    }
+
+    private String buildColorChipText(Color color) {
+        if (color == null) {
+            return "";
+        }
+        String name = color.getDisplayName();
+        if (name == null || name.isBlank()) {
+            return "";
+        }
+        String[] parts = name.trim().split("\\s+");
+        if (parts.length >= 2) {
+            return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+        }
+        if ("Railroad".equalsIgnoreCase(name)) {
+            return "RR";
+        }
+        if ("Utility".equalsIgnoreCase(name)) {
+            return "UT";
+        }
+        return name.substring(0, 1).toUpperCase();
     }
 
     // Render hand cards
@@ -2022,6 +2107,7 @@ public class   GameController {
     // Render bank cards
     private void renderBankCards(PlayerManagement player) {
         myBankBox.getChildren().clear();
+        myBankBox.setSpacing(-54);
         for (Card card : player.getBankCardsView()) {
             CardView cardView = new CardView(card, true);
             cardView.setDisable(true);
@@ -2030,6 +2116,7 @@ public class   GameController {
         }
 
         if (myBankBox.getChildren().isEmpty()) {
+            myBankBox.setSpacing(14);
             Label emptyView = new Label("No cards");
             emptyView.setStyle("-fx-text-fill: #666666;");
             myBankBox.getChildren().add(emptyView);
@@ -2056,6 +2143,7 @@ public class   GameController {
 
             HBox propertyRow = new HBox(8);
             propertyRow.setAlignment(Pos.CENTER_LEFT);
+            propertyRow.setSpacing(-54);
 
             boolean hasAnyCard = false;
             for (PropertyCard propertyCard : zone.getPropertiesView()) {
@@ -2095,6 +2183,50 @@ public class   GameController {
             emptyView.setStyle("-fx-text-fill: #666666;");
             myPropertyBox.getChildren().add(emptyView);
         }
+    }
+
+    public void handleRemoteGameOver(String message) {
+        if (message == null) {
+            return;
+        }
+        if (message.startsWith("ABORTED:")) {
+            showAbortDialogAndExit(message.substring("ABORTED:".length()).trim());
+        }
+    }
+
+    private void showAbortDialogAndExit(String reason) {
+        if (winnerDialogShown) {
+            return;
+        }
+        winnerDialogShown = true;
+
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Game Over");
+        dialog.getDialogPane().getButtonTypes().add(new ButtonType("OK", ButtonBar.ButtonData.OK_DONE));
+
+        VBox root = new VBox(10);
+        root.getStyleClass().add("overlay");
+        root.setStyle("-fx-padding: 18; -fx-alignment: center;");
+
+        Label title = new Label("Match ended");
+        title.setStyle("-fx-font-size: 26px; -fx-font-weight: 800;");
+        Label detail = new Label(reason == null || reason.isBlank() ? "A player disconnected." : reason);
+        detail.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: #b91c1c;");
+        detail.setWrapText(true);
+        detail.setMaxWidth(520);
+
+        root.getChildren().addAll(title, detail);
+        dialog.getDialogPane().setContent(root);
+        try {
+            var url = getClass().getResource("/theme.css");
+            if (url != null) {
+                dialog.getDialogPane().getStylesheets().add(url.toExternalForm());
+            }
+        } catch (Exception ignored) {
+        }
+
+        dialog.showAndWait();
+        Platform.runLater(this::onNavigateBackClicked);
     }
 
     private void handleBankCardClick(Card card) {
@@ -2146,8 +2278,7 @@ public class   GameController {
 
     // Card click handling in online mode
     private void handleOnlineCardClick(Card card) {
-        if (!isMyTurn) {
-            showError("It's not your turn!");
+        if (!ensureOnlinePlayAllowed()) {
             return;
         }
 
@@ -2172,9 +2303,43 @@ public class   GameController {
         }
     }
 
+    private int getOnlineRemainingPlays() {
+        if (!isOnlineMode) {
+            return GameManager.MAX_PLAY_COUNT_PER_TURN;
+        }
+        if (gameManager != null) {
+            try {
+                return gameManager.getRemainingPlayCountThisTurn();
+            } catch (Exception ignored) {
+            }
+        }
+        return lastServerMaxPlayCountPerTurn - lastServerPlayedCardsThisTurn;
+    }
+
+    private boolean ensureOnlinePlayAllowed() {
+        if (!isOnlineMode) {
+            return true;
+        }
+        if (!isMyTurn || discardMode) {
+            showError("It's not your turn.");
+            return false;
+        }
+        if (getOnlineRemainingPlays() <= 0) {
+            int played = gameManager != null ? gameManager.getPlayedCardsThisTurn() : Math.max(0, lastServerPlayedCardsThisTurn);
+            int max = gameManager != null ? GameManager.MAX_PLAY_COUNT_PER_TURN : Math.max(1, lastServerMaxPlayCountPerTurn);
+            showError("You have already played " + played + "/" + max + " cards this turn. End your turn.");
+            return false;
+        }
+        return true;
+    }
+
     private void renderOnlineHandActionButtons() {
         handActionBox.getChildren().clear();
         if (selectedHandCard == null) {
+            return;
+        }
+        if (!ensureOnlinePlayAllowed()) {
+            selectedHandCard = null;
             return;
         }
 
@@ -2207,6 +2372,9 @@ public class   GameController {
     }
 
     private void handleOnlineSlyDeal(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
         PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
@@ -2225,13 +2393,15 @@ public class   GameController {
         String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + targetCard.getId();
         sendActionToServer(actionStr);
 
-        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
 
     // --- Online Forced Deal ---
     private void handleOnlineForcedDeal(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
         // Check whether we have a property to trade
@@ -2259,7 +2429,6 @@ public class   GameController {
         String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + myCard.getId() + ":" + targetCard.getId();
         sendActionToServer(actionStr);
 
-        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -2267,6 +2436,9 @@ public class   GameController {
 
     // --- Action dispatch routing (online) ---
     private void sendPlayAction(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         // 1) Block helper cards that cannot be played alone
         if (card instanceof DoubleTheRentCard) {
             showError("Operation failed: Double The Rent cannot be played alone. You will be prompted when playing a rent card.");
@@ -2301,12 +2473,14 @@ public class   GameController {
 
         // 3) No-parameter action cards
         sendActionToServer("PLAY_ACTION:" + card.getId());
-        animateHandCardToDiscard(card, () -> removeCardFromHandUI(card));
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
     // --- Handle rent cards and optionally stack Double The Rent ---
     private void handleOnlineRent(Card rentCard) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
         Color selectedColor = promptForRentColor(rentCard, currentPlayer);
@@ -2361,13 +2535,15 @@ public class   GameController {
             sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":BI_RENT:" + selectedColor.name() + ":" + doubleCardId);
         }
 
-        animateHandCardToDiscard(rentCard, () -> removeCardFromHandUI(rentCard));
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
 
     // --- Online house/hotel: player chooses which color set to attach to ---
     private void handleOnlineBuilding(Card buildingCard) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
         PropertyZone zone = interactor.choiceBuildingPropertyZone(currentPlayer, buildingCard);
@@ -2377,11 +2553,13 @@ public class   GameController {
         // PLAY_ACTION:<cardId>:BUILDING:<color>
         sendActionToServer("PLAY_ACTION:" + buildingCard.getId() + ":BUILDING:" + selectedColor.name());
 
-        removeCardFromHandUI(buildingCard);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
     private void handleOnlineDealBreaker(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         PlayerManagement currentPlayer = gameManager.getPlayersView().get(localPlayerIndex);
 
         PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
@@ -2398,13 +2576,15 @@ public class   GameController {
         String actionStr = "PLAY_ACTION:" + card.getId() + ":" + targetPlayer.getPlayerId() + ":" + selectedZone.getColor().name();
         sendActionToServer(actionStr);
 
-        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
 
     // --- Online Debt Collector ---
     private void handleOnlineDebtCollector(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
 
         PlayerManagement currentPlayer =
                 gameManager.getPlayersView().get(localPlayerIndex);
@@ -2430,7 +2610,6 @@ public class   GameController {
 
         sendActionToServer(actionStr);
 
-        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -2444,13 +2623,18 @@ public class   GameController {
     }
 
     private void sendDepositAction(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         sendActionToServer("DEPOSIT:" + card.getId());
-        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
 
     private void sendPlacePropertyAction(Card card) {
+        if (!ensureOnlinePlayAllowed()) {
+            return;
+        }
         if (!(card instanceof PropertyCard propertyCard)) {
             showError("This card cannot be placed as property: " + card.getName());
             return;
@@ -2473,7 +2657,6 @@ public class   GameController {
         }
 
         sendActionToServer("PLACE_PROPERTY:" + card.getId() + ":" + selectedColor.name());
-        removeCardFromHandUI(card);
         selectedHandCard = null;
         handActionBox.getChildren().clear();
     }
@@ -2979,8 +3162,7 @@ public class   GameController {
 
         // 2) Online mode (unified path; host does not bypass server)
         if (isOnlineMode) {
-            if (!isMyTurn) {
-                showError("It's not your turn!");
+            if (!ensureOnlinePlayAllowed()) {
                 return;
             }
 
@@ -2990,6 +3172,12 @@ public class   GameController {
         }
 
         // 3) Offline mode
+        if (gameManager != null && !gameManager.canCurrentPlayerPlayCard()) {
+            int played = gameManager.getPlayedCardsThisTurn();
+            int max = GameManager.MAX_PLAY_COUNT_PER_TURN;
+            showError("You have already played " + played + "/" + max + " cards this turn. End your turn.");
+            return;
+        }
         selectedHandCard = card;
         renderHandActionButtons();
     }
@@ -3390,13 +3578,16 @@ public class   GameController {
     // Client-side handling for payment request
     public void handleRequirePayment(int amount, String collectorId) {
         PlayerManagement me = gameManager.getPlayersView().get(localPlayerIndex);
-        if (calculateAssetTotalValue(me) <= amount) {
+        if (calculateAssetTotalValue(me) < amount) {
             sendActionToServer("PAYMENT_RESPONSE:NONE");
             return;
         }
 
         // 1) Ask player to select assets
         List<Card> selectedAssets = interactor.showSelectableAssets(me, amount);
+        if (selectedAssets == null || selectedAssets.isEmpty()) {
+            selectedAssets = autoSelectAssetsForPayment(me, amount);
+        }
 
         // 2) Build card id list
         StringBuilder response = new StringBuilder("PAYMENT_RESPONSE:");
@@ -3414,6 +3605,35 @@ public class   GameController {
 
     private int calculateAssetTotalValue(PlayerManagement player) {
         return player.calculateAssetTotalValue();
+    }
+
+    private List<Card> autoSelectAssetsForPayment(PlayerManagement player, int amount) {
+        if (player == null || amount <= 0) {
+            return java.util.Collections.emptyList();
+        }
+        List<Card> assets = new ArrayList<>();
+        assets.addAll(player.getBankCardsView());
+        for (PropertyZone zone : player.getPropertyZonesView().values()) {
+            if (zone == null) continue;
+            if (zone.getPropertiesView() != null) {
+                assets.addAll(zone.getPropertiesView());
+            }
+            if (zone.getHouse() != null) assets.add(zone.getHouse());
+            if (zone.getHotel() != null) assets.add(zone.getHotel());
+        }
+        Collections.shuffle(assets);
+        List<Card> selected = new ArrayList<>();
+        int value = 0;
+        for (Card c : assets) {
+            if (c == null || c.getId() == null) continue;
+            selected.add(c);
+            value += c.getValue();
+            if (value >= amount) break;
+        }
+        if (value < amount) {
+            return java.util.Collections.emptyList();
+        }
+        return selected;
     }
 
     public void handleAskJustSayNo(String sourcePlayer, String actionName) {

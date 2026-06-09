@@ -44,7 +44,13 @@ public class Interactor implements GameInteractor {
         Label requiredAmountLabel = new Label("Required amount: " + requiredAmount + "M");
         requiredAmountLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
         Label selectedAmountLabel = new Label("Selected total: 0M");
-        content.getChildren().addAll(requiredAmountLabel, selectedAmountLabel);
+        Label paymentRuleLabel = new Label(
+                "Pay with cards on the table only: bank, property, house, or hotel. "
+                        + "Hand cards cannot be used. Confirm when the total meets or exceeds the required amount. No change is given."
+        );
+        paymentRuleLabel.setWrapText(true);
+        paymentRuleLabel.setStyle("-fx-text-fill: #475569;");
+        content.getChildren().addAll(requiredAmountLabel, selectedAmountLabel, paymentRuleLabel);
 
         Map<CheckBox, Card> bankCheckMap = new LinkedHashMap<>();
         Map<CheckBox, Card> propertyCheckMap = new LinkedHashMap<>();
@@ -120,7 +126,9 @@ public class Interactor implements GameInteractor {
             for (Map.Entry<CheckBox, Card> e : propertyCheckMap.entrySet()) {
                 if (e.getKey().isSelected()) total += e.getValue().getValue();
             }
-            selectedAmountLabel.setText("Selected total: " + total + "M");
+            selectedAmountLabel.setText(total >= requiredAmount
+                    ? "Selected total: " + total + "M (enough to pay)"
+                    : "Selected total: " + total + "M");
             confirmButton.setDisable(total < requiredAmount);
         };
 
