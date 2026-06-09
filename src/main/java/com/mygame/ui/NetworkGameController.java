@@ -21,11 +21,18 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Rectangle;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.LinkedHashSet;
 import java.util.List;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 
 /**
  * Online lobby controller.
@@ -50,6 +57,7 @@ public class NetworkGameController {
     @FXML private Button startButton;
     @FXML private Label hintLabel;
     @FXML private Label statusLabel;
+    @FXML private Label lanInfoLabel;
     @FXML private HBox gameArea;
     @FXML private Button endTurnButton;
     @FXML private Label turnInfoLabel;
@@ -82,8 +90,11 @@ public class NetworkGameController {
 
     @FXML
     public void initialize() {
-        serverAddressField.setText("127.0.0.1");
-        portField.setText("12345");
+        AppSettings settings = AppSettings.getInstance();
+        String savedAddress = settings.getLastServerAddress();
+        serverAddressField.setText(savedAddress == null ? "" : savedAddress);
+        serverAddressField.setPromptText("Host LAN IP, e.g. 192.168.1.10");
+        portField.setText(String.valueOf(settings.getLastServerPort()));
         selectPlayerCount(2);
 
         gameArea.setVisible(false);
@@ -95,6 +106,7 @@ public class NetworkGameController {
         if (hintLabel != null) {
             hintLabel.setText("Click Create Game to choose the room size, or Join Game to enter an existing room.");
         }
+        refreshLanInfo(false, false, portField == null ? 12345 : safeParsePort(portField.getText(), 12345));
         applyExplicitLobbyImages();
         installButtonGraphics();
 
@@ -384,11 +396,13 @@ public class NetworkGameController {
                 hintLabel.setText("Choose 2, 3, 4, or 5 players, then click Confirm Create Game.");
             }
             statusLabel.setText("Choose the player count for this room.");
+            refreshLanInfo(true, false, safeParsePort(portField.getText(), 12345));
             return;
         }
 
         try {
             int port = Integer.parseInt(portField.getText());
+            AppSettings.getInstance().setLastServerPort(port);
 
             statusLabel.setText("Creating server");
             lobbyPlayers.clear();
@@ -460,15 +474,21 @@ public class NetworkGameController {
 
             gameServer.start();
             isHost = true;
+            String preferredAddress = getPreferredLanAddress();
+            if (preferredAddress != null && !preferredAddress.isBlank()) {
+                serverAddressField.setText(preferredAddress);
+                AppSettings.getInstance().setLastServerAddress(preferredAddress);
+            }
             setPlayerCountButtonsDisabled(true);
             if (hostButton != null) hostButton.setDisable(true);
             if (joinButton != null) joinButton.setDisable(true);
             if (portField != null) portField.setDisable(true);
             if (serverAddressField != null) serverAddressField.setDisable(true);
-            statusLabel.setText("Server started. Waiting for players: " + lobbyPlayers.size() + "/" + playerCount);
+            statusLabel.setText("Room open. Share " + serverAddressField.getText() + ":" + port + " with other computers. Players: " + lobbyPlayers.size() + "/" + playerCount);
             if (hintLabel != null) {
                 hintLabel.setText("Click Ready first. When everyone is Ready, click Start (Host).");
             }
+            refreshLanInfo(true, true, port);
 
         } catch (NumberFormatException e) {
             showError("Please enter valid numbers");
@@ -480,8 +500,14 @@ public class NetworkGameController {
     @FXML
     private void onJoinButtonClicked() {
         try {
-            String address = serverAddressField.getText();
+            String address = serverAddressField.getText() == null ? "" : serverAddressField.getText().trim();
+            if (address.isBlank()) {
+                showError("Please enter the host LAN IP address.");
+                return;
+            }
             int port = Integer.parseInt(portField.getText());
+            AppSettings.getInstance().setLastServerAddress(address);
+            AppSettings.getInstance().setLastServerPort(port);
 
             statusLabel.setText("Connecting to " + address + ":" + port);
             lobbyPlayers.clear();
@@ -527,6 +553,7 @@ public class NetworkGameController {
                             readyButton.setText("Ready");
                         }
                         stopReadyAttention();
+                        refreshLanInfo(false, false, safeParsePort(portField == null ? null : portField.getText(), 12345));
                     });
                 }
 
@@ -644,7 +671,77 @@ public class NetworkGameController {
         if ("Game is full".equalsIgnoreCase(message)) {
             return "This room is full. You cannot join it.";
         }
+        String lower = message.toLowerCase();
+        if (lower.contains("refused")) {
+            return "Connection refused. Make sure the host has created the room, the port matches, and the firewall allows the game.";
+        }
+        if (lower.contains("timed out")) {
+            return "Connection timed out. Make sure both computers are on the same LAN and use the host LAN IP instead of 127.0.0.1.";
+        }
+        if (lower.contains("unreachable")) {
+            return "Host unreachable. Check the host LAN IP and make sure both computers are on the same network.";
+        }
         return "Connection failed: " + message;
+    }
+
+    private void refreshLanInfo(boolean hostMode, boolean roomOpen, int port) {
+        if (lanInfoLabel == null) {
+            return;
+        }
+        List<String> addresses = getLocalLanAddresses();
+        if (hostMode) {
+            if (addresses.isEmpty()) {
+                lanInfoLabel.setText("LAN IP not detected automatically. Other computers on the same network must use your PC's IPv4 address and port " + port + ".");
+            } else if (roomOpen) {
+                lanInfoLabel.setText("Room share address: " + String.join(" / ", addresses) + ":" + port + ". Guests on other computers must use one of these LAN IPs, not 127.0.0.1.");
+            } else {
+                lanInfoLabel.setText("Host LAN IP: " + String.join(" / ", addresses) + ". After creating the room, share one of these with port " + port + ".");
+            }
+            return;
+        }
+        lanInfoLabel.setText("LAN tip: on another computer, enter the host LAN IP and port " + port + ". 127.0.0.1 only works on the same computer.");
+    }
+
+    private String getPreferredLanAddress() {
+        List<String> addresses = getLocalLanAddresses();
+        return addresses.isEmpty() ? "" : addresses.get(0);
+    }
+
+    private List<String> getLocalLanAddresses() {
+        LinkedHashSet<String> addresses = new LinkedHashSet<>();
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            if (interfaces == null) {
+                return Collections.emptyList();
+            }
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface network = interfaces.nextElement();
+                if (!network.isUp() || network.isLoopback() || network.isVirtual()) {
+                    continue;
+                }
+                Enumeration<InetAddress> inetAddresses = network.getInetAddresses();
+                while (inetAddresses.hasMoreElements()) {
+                    InetAddress address = inetAddresses.nextElement();
+                    if (address instanceof Inet4Address && !address.isLoopbackAddress() && address.isSiteLocalAddress()) {
+                        addresses.add(address.getHostAddress());
+                    }
+                }
+            }
+        } catch (SocketException ignored) {
+        }
+        return new ArrayList<>(addresses);
+    }
+
+    private int safeParsePort(String text, int fallback) {
+        if (text == null || text.isBlank()) {
+            return fallback;
+        }
+        try {
+            int port = Integer.parseInt(text.trim());
+            return (port >= 1 && port <= 65535) ? port : fallback;
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 
     @FXML

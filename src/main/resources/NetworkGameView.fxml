@@ -50,6 +50,7 @@
         <VBox fx:id="mainPanel" spacing="16" prefWidth="620" styleClass="lobby-card" style="-fx-padding: 28;">
             <Label text="Connection" styleClass="panel-title"/>
             <Label text="The host sets room size. Guests only need the host address and port." styleClass="panel-copy" wrapText="true"/>
+            <Label fx:id="lanInfoLabel" text="LAN tip: use the host's local network IP on other computers, not 127.0.0.1." styleClass="hint" wrapText="true"/>
 
             <HBox spacing="12" alignment="CENTER_LEFT">
                 <VBox spacing="6" HBox.hgrow="ALWAYS">

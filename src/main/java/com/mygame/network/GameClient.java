@@ -6,7 +6,9 @@ import com.mygame.network.protocol.NetworkProtocol;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -15,6 +17,8 @@ import java.util.concurrent.Executors;
  * Connects to server and receives game state updates.
  */
 public class GameClient {
+    private static final int CONNECT_TIMEOUT_MS = 5000;
+    private static final int HANDSHAKE_TIMEOUT_MS = 5000;
     private Socket socket;
     private ObjectInputStream in;
     private ObjectOutputStream out;
@@ -73,7 +77,9 @@ public class GameClient {
     public void connect() {
         executorService.submit(() -> {
             try {
-                socket = new Socket(serverAddress, port);
+                socket = new Socket();
+                socket.connect(new InetSocketAddress(serverAddress, port), CONNECT_TIMEOUT_MS);
+                socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
                 out = new ObjectOutputStream(socket.getOutputStream());
                 in = new ObjectInputStream(socket.getInputStream());
                 connected = true;
@@ -87,6 +93,7 @@ public class GameClient {
                 if (response.getType() == NetworkProtocol.MessageType.CONNECT_ACK) {
                     if (response.getContent().startsWith("OK")) {
                         assignedPlayerIndex = parseAssignedPlayerIndex(response.getContent());
+                        socket.setSoTimeout(0);
                         if (listener != null) {
                             listener.onConnected();
                         }
@@ -101,6 +108,11 @@ public class GameClient {
                     }
                 }
                 
+            } catch (SocketTimeoutException e) {
+                if (listener != null) {
+                    listener.onConnectFailed("Connection timed out");
+                }
+                close();
             } catch (IOException | ClassNotFoundException e) {
                 if (listener != null) {
                     listener.onConnectFailed("Connection failed: " + e.getMessage());

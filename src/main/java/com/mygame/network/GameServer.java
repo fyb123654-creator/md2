@@ -17,8 +17,10 @@ import com.mygame.ui.GameController;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,6 +29,7 @@ import java.util.logging.Logger;
 
 public class GameServer {
     private static final Logger LOGGER = Logger.getLogger(GameServer.class.getName());
+    private static final int HANDSHAKE_TIMEOUT_MS = 8000;
     private ServerSocket serverSocket;
     private ExecutorService executorService;
     private final Map<Integer, ClientHandler> clientsByIndex;
@@ -136,7 +139,9 @@ public class GameServer {
     }
 
     public void start() throws IOException {
-        serverSocket = new ServerSocket(port);
+        serverSocket = new ServerSocket();
+        serverSocket.setReuseAddress(true);
+        serverSocket.bind(new InetSocketAddress("0.0.0.0", port));
         running = true;
         executorService.submit(() -> {
             while (running) {
@@ -215,7 +220,7 @@ public class GameServer {
 
     public boolean canStartGame() {
         // All clients connected
-        if (getConnectedClientCount() != expectedPlayerCount - 1) {
+        if (getRegisteredClientCount() != expectedPlayerCount - 1) {
             return false;
         }
         // All players ready
@@ -335,6 +340,18 @@ public class GameServer {
         synchronized (clientsLock) {
             return clientsByIndex.size();
         }
+    }
+
+    private int getRegisteredClientCount() {
+        int count = 0;
+        synchronized (clientsLock) {
+            for (ClientHandler client : clientsByIndex.values()) {
+                if (client != null && client.isRegistered() && client.isConnected()) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     private List<ClientHandler> getClientSnapshot() {
@@ -637,6 +654,7 @@ public class GameServer {
             // Initialize streams in constructor to avoid early message loss
             if (socket != null) {
                 try {
+                    socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
                     out = new ObjectOutputStream(socket.getOutputStream());
                     in = new ObjectInputStream(socket.getInputStream());
                     out.writeObject(NetworkProtocol.connectAck(true, String.valueOf(playerIndex)));
@@ -661,7 +679,17 @@ public class GameServer {
             try {
                 while (connected) {
                     NetworkProtocol message = (NetworkProtocol) in.readObject();
+                    if (!registered && message.getType() != NetworkProtocol.MessageType.CONNECT) {
+                        send(NetworkProtocol.error("Expected CONNECT handshake first"));
+                        break;
+                    }
                     handleMessage(message);
+                }
+            } catch (SocketTimeoutException e) {
+                if (!registered && connected) {
+                    LOGGER.log(Level.INFO, "Handshake timed out for player slot " + playerIndex);
+                } else if (connected) {
+                    LOGGER.log(Level.WARNING, "Socket timeout for player " + playerIndex, e);
                 }
             } catch (IOException | ClassNotFoundException e) {
                 if (connected) {
@@ -705,6 +733,10 @@ public class GameServer {
                     }
                     if (!registered) {
                         registered = true;
+                        try {
+                            socket.setSoTimeout(0);
+                        } catch (IOException ignored) {
+                        }
                         if (listener != null) {
                             listener.onClientConnected(name);
                         }
@@ -1453,5 +1485,7 @@ public class GameServer {
         }
 
         public int getPlayerIndex() { return playerIndex; }
+        public boolean isRegistered() { return registered; }
+        public boolean isConnected() { return connected; }
     }
 }

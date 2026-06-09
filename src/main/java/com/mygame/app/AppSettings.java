@@ -7,6 +7,8 @@ public final class AppSettings {
     private String playerName = "";
     private int avatarId = 0;
     private boolean onboardingShown = false;
+    private String lastServerAddress = "";
+    private int lastServerPort = 12345;
 
     private AppSettings() {
     }
@@ -49,5 +51,28 @@ public final class AppSettings {
 
     public void setOnboardingShown(boolean onboardingShown) {
         this.onboardingShown = onboardingShown;
+    }
+
+    public String getLastServerAddress() {
+        return lastServerAddress;
+    }
+
+    public void setLastServerAddress(String lastServerAddress) {
+        if (lastServerAddress == null || lastServerAddress.isBlank()) {
+            this.lastServerAddress = "";
+            return;
+        }
+        this.lastServerAddress = lastServerAddress.trim();
+    }
+
+    public int getLastServerPort() {
+        return lastServerPort;
+    }
+
+    public void setLastServerPort(int lastServerPort) {
+        if (lastServerPort < 1 || lastServerPort > 65535) {
+            return;
+        }
+        this.lastServerPort = lastServerPort;
     }
 }
