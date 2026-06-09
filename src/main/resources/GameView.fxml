@@ -111,7 +111,7 @@
                                     </ScrollPane>
                                 </VBox>
                                 <VBox spacing="8" styleClass="zone-card">
-                                    <Label text="My Properties" styleClass="zone-label"/>
+                                    <Label fx:id="myPropertiesTitleLabel" text="My Properties" styleClass="zone-label"/>
                                     <ScrollPane fx:id="myPropertyScrollPane" fitToWidth="true" pannable="true" hbarPolicy="AS_NEEDED" vbarPolicy="NEVER" prefViewportHeight="118" prefViewportWidth="470" styleClass="zone-scroll">
                                         <content>
                                             <HBox fx:id="myPropertyBox" alignment="CENTER_LEFT" spacing="14"/>

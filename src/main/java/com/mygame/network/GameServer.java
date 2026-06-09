@@ -38,6 +38,7 @@ public class GameServer {
     private int port;
     private boolean running;
     private volatile boolean abortBroadcasted;
+    private volatile int turnClockId;
     private int expectedPlayerCount;
     private OnGameStateChangeListener listener;
     private volatile GameStateData lastBroadcastState;
@@ -204,6 +205,7 @@ public class GameServer {
             if (gameManager.getCardManager() == null) {
                 gameManager.startRound();
             }
+            restartTurnClock();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to start game", e);
         }
@@ -270,6 +272,7 @@ public class GameServer {
 
     public void broadcastGameState() {
         GameStateData state = GameStateData.fromGameManager(gameManager);
+        state.setTurnClockId(turnClockId);
         lastBroadcastState = state;
         broadcast(NetworkProtocol.gameState(state));
         if (listener != null) listener.onStateChanged(state);
@@ -408,6 +411,7 @@ public class GameServer {
         if (isWaitingForJsnAction && pendingJsnResponder != null) {
             int responderIndex = findPlayerIndexById(pendingJsnResponder.getPlayerId());
             if (responderIndex >= 0) {
+                restartTurnClock();
                 processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
             }
             return;
@@ -416,6 +420,7 @@ public class GameServer {
         if (isWaitingForJsn && pendingPaymentJsnResponderId != null) {
             int responderIndex = findPlayerIndexById(pendingPaymentJsnResponderId);
             if (responderIndex >= 0) {
+                restartTurnClock();
                 processSystemAction(responderIndex, "JUST_SAY_NO_RESPONSE:NO");
             }
             return;
@@ -426,6 +431,7 @@ public class GameServer {
             PlayerManagement victim = findPlayerById(pendingVictimId);
             if (victimIndex >= 0 && victim != null) {
                 String selection = buildAutoPaymentSelection(victim, pendingPaymentAmount);
+                restartTurnClock();
                 processSystemAction(victimIndex, "PAYMENT_RESPONSE:" + selection);
             }
             return;
@@ -443,9 +449,18 @@ public class GameServer {
                     processSystemAction(currentIndex, "DISCARD:" + c.getId());
                 }
             }
+            processSystemAction(currentIndex, "END_TURN");
             return;
         }
         processSystemAction(currentIndex, "END_TURN");
+    }
+
+    public int getTurnClockId() {
+        return turnClockId;
+    }
+
+    private void restartTurnClock() {
+        turnClockId++;
     }
 
     private void processSystemAction(int playerIndex, String action) {
@@ -1095,6 +1110,7 @@ public class GameServer {
             gameManager.confirmCurrentPlayerTurnEnded();
             if (gameManager.canAdvanceTurn()) {
                 gameManager.advanceTurn();
+                restartTurnClock();
                 broadcastGameState();
                 return;
             }
@@ -1154,7 +1170,10 @@ public class GameServer {
             gameManager.getCardManager().playCard(targetCard);
             if (currentPlayer.getHandCardCount() <= PlayerManagement.MAX_HAND_SIZE) {
                 gameManager.confirmCurrentPlayerTurnEnded();
-                if (gameManager.canAdvanceTurn()) gameManager.advanceTurn();
+                if (gameManager.canAdvanceTurn()) {
+                    gameManager.advanceTurn();
+                    restartTurnClock();
+                }
             }
             broadcastGameState();
         }

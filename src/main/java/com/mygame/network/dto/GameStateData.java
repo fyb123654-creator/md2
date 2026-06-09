@@ -28,6 +28,7 @@ public class GameStateData implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private int currentPlayerIndex;
+    private int turnClockId;
     private int playedCardsThisTurn;
     private int maxPlayCountPerTurn;
     private boolean gameStarted;
@@ -71,6 +72,8 @@ public class GameStateData implements Serializable {
     // Getters and Setters
     public int getCurrentPlayerIndex() { return currentPlayerIndex; }
     public void setCurrentPlayerIndex(int currentPlayerIndex) { this.currentPlayerIndex = currentPlayerIndex; }
+    public int getTurnClockId() { return turnClockId; }
+    public void setTurnClockId(int turnClockId) { this.turnClockId = turnClockId; }
     public int getPlayedCardsThisTurn() { return playedCardsThisTurn; }
     public void setPlayedCardsThisTurn(int playedCardsThisTurn) { this.playedCardsThisTurn = playedCardsThisTurn; }
     public int getMaxPlayCountPerTurn() { return maxPlayCountPerTurn; }

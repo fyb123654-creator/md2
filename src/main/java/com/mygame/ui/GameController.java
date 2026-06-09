@@ -92,6 +92,8 @@ public class GameController {
     @FXML
     private HBox myPropertyBox;
     @FXML
+    private Label myPropertiesTitleLabel;
+    @FXML
     private HBox opponentAreaBox;
     @FXML
     private StackPane clientAvatarPane;
@@ -204,6 +206,7 @@ public class GameController {
     private ParallelTransition suggestedCardPulse;
     private int displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
     private int trackedTurnIndex = -1;
+    private int trackedTurnClockId = -1;
     private Card latestTableActionCard;
     private String latestTableActionTitle = "Latest Action";
 
@@ -654,6 +657,26 @@ public class GameController {
     }
 
     private void syncDisplayedTurnTimer(int currentTurnIndex) {
+        syncDisplayedTurnTimer(currentTurnIndex, -1);
+    }
+
+    private void syncDisplayedTurnTimer(int currentTurnIndex, int currentTurnClockId) {
+        if (currentTurnClockId >= 0) {
+            if (currentTurnClockId != trackedTurnClockId) {
+                trackedTurnClockId = currentTurnClockId;
+                trackedTurnIndex = currentTurnIndex;
+                displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
+                latestTableActionCard = null;
+                latestTableActionTitle = "Latest Action";
+                restartTurnTimer();
+                updateTimerDisplay();
+                return;
+            }
+            trackedTurnIndex = currentTurnIndex;
+            updateTimerDisplay();
+            return;
+        }
+        trackedTurnClockId = -1;
         if (currentTurnIndex != trackedTurnIndex) {
             trackedTurnIndex = currentTurnIndex;
             displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
@@ -960,7 +983,7 @@ public class GameController {
         }
         for (Color color : colors) {
             int count = player.getPropertyCount(color);
-            tableCurrentPropertyBox.getChildren().add(buildPropertyChip(color, buildPropertySetTitle(player, color, count)));
+            tableCurrentPropertyBox.getChildren().add(buildPropertyChip(player, color, count));
         }
     }
 
@@ -1159,6 +1182,9 @@ public class GameController {
     public void cleanup() {
         stopTurnTimer();
         stopSuggestedCardPulse();
+        trackedTurnIndex = -1;
+        trackedTurnClockId = -1;
+        displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
         if (gameClient != null) {
             gameClient.close();
         }
@@ -1195,6 +1221,9 @@ public class GameController {
 
         discardMode = false;
         selectedHandCard = null;
+        trackedTurnIndex = -1;
+        trackedTurnClockId = -1;
+        displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
         if (navBackButton != null) {
             navBackButton.setText(isOnlineMode ? "Exit to Lobby" : "Exit to Menu");
         }
@@ -1268,6 +1297,9 @@ public class GameController {
 
         discardMode = false;
         selectedHandCard = null;
+        trackedTurnIndex = -1;
+        trackedTurnClockId = -1;
+        displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
         localPlayerIndex = 0;
         if (navBackButton != null) {
             navBackButton.setText("Exit to Menu");
@@ -1466,7 +1498,7 @@ public class GameController {
 
         boolean wasMyTurn = isMyTurn;
         isMyTurn = (state.getCurrentPlayerIndex() == localPlayerIndex);
-        syncDisplayedTurnTimer(state.getCurrentPlayerIndex());
+        syncDisplayedTurnTimer(state.getCurrentPlayerIndex(), state.getTurnClockId());
         updatePileCounts(state.getDrawPileCount(), state.getDiscardPileCount());
         lastServerPlayedCardsThisTurn = state.getPlayedCardsThisTurn();
         lastServerMaxPlayCountPerTurn = state.getMaxPlayCountPerTurn();
@@ -1589,6 +1621,10 @@ public class GameController {
 
         GameStateData.PlayerData localPlayerData = players.get(localPlayerIndex);
         myPropertyBox.getChildren().clear();
+        PlayerManagement localPlayer = gameManager != null && localPlayerIndex < gameManager.getPlayersView().size()
+                ? gameManager.getPlayersView().get(localPlayerIndex)
+                : null;
+        updateMyPropertiesTitle(localPlayer);
 
         for (var entry : localPlayerData.getPropertyZones().entrySet()) {
             Color color = entry.getKey();
@@ -1596,13 +1632,8 @@ public class GameController {
 
             VBox colorGroup = new VBox(8);
             colorGroup.setPadding(new Insets(8));
-            colorGroup.setStyle("-fx-background-color: #fafafa; -fx-border-color: #d9d9d9; -fx-border-radius: 8; -fx-background-radius: 8;");
-
-            PlayerManagement localPlayer = gameManager != null && localPlayerIndex < gameManager.getPlayersView().size()
-                    ? gameManager.getPlayersView().get(localPlayerIndex)
-                    : null;
             Label colorTitle = new Label(buildPropertySetTitle(localPlayer, color, zoneData.getProperties().size()));
-            colorTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + toFxColor(color) + ";");
+            stylePropertySetGroup(colorGroup, colorTitle, localPlayer, color, zoneData.getProperties().size());
             installLabelTooltip(colorTitle, colorTitle.getText());
             colorGroup.getChildren().add(colorTitle);
 
@@ -1675,7 +1706,11 @@ public class GameController {
         }
 
         PlayerManagement currentPlayer = gameManager.getCurrentPlayer();
-        syncDisplayedTurnTimer(gameManager.getCurrentPlayerIndex());
+        if (isOnlineMode && isHost() && gameServer != null) {
+            syncDisplayedTurnTimer(gameManager.getCurrentPlayerIndex(), gameServer.getTurnClockId());
+        } else {
+            syncDisplayedTurnTimer(gameManager.getCurrentPlayerIndex());
+        }
         // In online mode always render local player's hand (not the current turn player's hand)
         PlayerManagement localPlayer = isOnlineMode
                 ? gameManager.getPlayersView().get(localPlayerIndex)
@@ -1758,7 +1793,13 @@ public class GameController {
     }
 
     private VBox createCompactOpponentCard(PlayerManagement player, boolean isTurnPlayer) {
-        VBox container = createCompactCardShell(player.getName(), player.getAvatarId(), player.getHandCardCount(), isTurnPlayer);
+        VBox container = createCompactCardShell(
+                player.getName(),
+                player.getAvatarId(),
+                player.getHandCardCount(),
+                player.getCompleteSetCount(),
+                isTurnPlayer
+        );
         HBox bankRow = new HBox(6);
         bankRow.setAlignment(Pos.CENTER_LEFT);
         appendCardPreview(bankRow, player.getBankCardsView(), 3);
@@ -1772,7 +1813,13 @@ public class GameController {
     }
 
     private VBox createCompactOpponentCard(GameStateData.PlayerData playerData, PlayerManagement player, boolean isTurnPlayer) {
-        VBox container = createCompactCardShell(playerData.getPlayerName(), playerData.getAvatarId(), playerData.getHandCardCount(), isTurnPlayer);
+        VBox container = createCompactCardShell(
+                playerData.getPlayerName(),
+                playerData.getAvatarId(),
+                playerData.getHandCardCount(),
+                resolveCompleteSetCount(playerData, player),
+                isTurnPlayer
+        );
 
         HBox bankRow = new HBox(6);
         bankRow.setAlignment(Pos.CENTER_LEFT);
@@ -1790,7 +1837,7 @@ public class GameController {
         return container;
     }
 
-    private VBox createCompactCardShell(String playerName, int avatarId, int handCount, boolean isTurnPlayer) {
+    private VBox createCompactCardShell(String playerName, int avatarId, int handCount, int completeSetCount, boolean isTurnPlayer) {
         VBox container = new VBox(8);
         container.getStyleClass().addAll("player-card", "compact-player-card");
         if (isTurnPlayer) {
@@ -1807,7 +1854,7 @@ public class GameController {
         Label nameLabel = new Label(playerName == null || playerName.isBlank() ? "Player" : playerName);
         nameLabel.getStyleClass().add("compact-player-name");
         nameLabel.setTextOverrun(OverrunStyle.CLIP);
-        Label handLabel = new Label("Hand: " + handCount);
+        Label handLabel = new Label("Hand: " + handCount + " | Sets: " + completeSetCount + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
         handLabel.getStyleClass().add("compact-player-meta");
         titleBox.getChildren().addAll(nameLabel, handLabel);
 
@@ -1847,7 +1894,7 @@ public class GameController {
                 continue;
             }
             hasProperty = true;
-            row.getChildren().add(buildPropertyChip(color, buildPropertySetTitle(player, color, count)));
+            row.getChildren().add(buildPropertyChip(player, color, count));
         }
         if (!hasProperty) {
             row.getChildren().add(buildSummaryChip("None"));
@@ -1863,10 +1910,7 @@ public class GameController {
                 continue;
             }
             hasProperty = true;
-            String tooltipText = player == null
-                    ? color.name() + "  " + count
-                    : buildPropertySetTitle(player, color, count);
-            row.getChildren().add(buildPropertyChip(color, tooltipText));
+            row.getChildren().add(buildPropertyChip(player, color, count));
         }
         if (!hasProperty) {
             row.getChildren().add(buildSummaryChip("None"));
@@ -1880,11 +1924,17 @@ public class GameController {
         return chip;
     }
 
-    private Label buildPropertyChip(Color color, String tooltipText) {
-        Label chip = new Label(buildColorChipText(color));
+    private Label buildPropertyChip(PlayerManagement player, Color color, int currentCount) {
+        boolean completeSet = isPropertySetComplete(player, color, currentCount);
+        Label chip = new Label(buildCompactPropertyProgressText(player, color, currentCount));
         chip.getStyleClass().add("summary-chip");
-        chip.setStyle("-fx-background-color: " + toSoftFxColor(color) + "; -fx-border-color: " + toFxColor(color) + ";");
+        String background = completeSet ? "#fde68a" : toSoftFxColor(color);
+        String border = completeSet ? "#f59e0b" : toFxColor(color);
+        chip.setStyle("-fx-background-color: " + background + "; -fx-border-color: " + border + ";");
         chip.setTextOverrun(OverrunStyle.CLIP);
+        String tooltipText = player == null
+                ? color.name() + "  " + currentCount
+                : buildPropertySetTitle(player, color, currentCount);
         installLabelTooltip(chip, tooltipText);
         return chip;
     }
@@ -2126,6 +2176,7 @@ public class GameController {
     // Render property cards
     private void renderPropertyCards(PlayerManagement player) {
         myPropertyBox.getChildren().clear();
+        updateMyPropertiesTitle(player);
 
         for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
             Color color = entry.getKey();
@@ -2134,10 +2185,9 @@ public class GameController {
 
             VBox colorGroup = new VBox(8);
             colorGroup.setPadding(new Insets(8));
-            colorGroup.setStyle("-fx-background-color: #fafafa; -fx-border-color: #d9d9d9; -fx-border-radius: 8; -fx-background-radius: 8;");
 
             Label colorTitle = new Label(buildPropertySetTitle(player, color, currentCount));
-            colorTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + toFxColor(color) + ";");
+            stylePropertySetGroup(colorGroup, colorTitle, player, color, currentCount);
             installLabelTooltip(colorTitle, colorTitle.getText());
             colorGroup.getChildren().add(colorTitle);
 
@@ -3500,7 +3550,80 @@ public class GameController {
         int requiredCount = player.getRequiredSetSize(color);
         String requiredText = requiredCount == Integer.MAX_VALUE ? "?" : String.valueOf(requiredCount);
         int rent = player.getRent(color);
-        return color.name() + "  " + currentCount + "/" + requiredText + "  Rent: " + rent + "M";
+        String setState = isPropertySetComplete(player, color, currentCount) ? "  Complete Set" : "";
+        return color.name() + "  " + currentCount + "/" + requiredText + "  Rent: " + rent + "M" + setState;
+    }
+
+    private String buildCompactPropertyProgressText(PlayerManagement player, Color color, int currentCount) {
+        String prefix = buildColorChipText(color);
+        int requiredCount = player == null ? getRequiredPropertySetSize(color) : player.getRequiredSetSize(color);
+        String requiredText = requiredCount == Integer.MAX_VALUE ? "?" : String.valueOf(requiredCount);
+        return prefix + " " + currentCount + "/" + requiredText;
+    }
+
+    private boolean isPropertySetComplete(PlayerManagement player, Color color, int currentCount) {
+        if (player == null || color == null) {
+            return false;
+        }
+        int requiredCount = player.getRequiredSetSize(color);
+        return requiredCount != Integer.MAX_VALUE && currentCount >= requiredCount;
+    }
+
+    private void stylePropertySetGroup(VBox colorGroup, Label colorTitle, PlayerManagement player, Color color, int currentCount) {
+        if (colorGroup == null || colorTitle == null) {
+            return;
+        }
+        colorGroup.getStyleClass().removeAll("property-set-card", "complete-set");
+        colorGroup.getStyleClass().add("property-set-card");
+        colorTitle.getStyleClass().removeAll("property-set-title", "complete-set-title");
+        colorTitle.getStyleClass().add("property-set-title");
+        colorTitle.setTextFill(javafx.scene.paint.Paint.valueOf(toFxColor(color)));
+        if (isPropertySetComplete(player, color, currentCount)) {
+            colorGroup.getStyleClass().add("complete-set");
+            colorTitle.getStyleClass().add("complete-set-title");
+        }
+    }
+
+    private void updateMyPropertiesTitle(PlayerManagement player) {
+        if (myPropertiesTitleLabel == null) {
+            return;
+        }
+        if (player == null) {
+            myPropertiesTitleLabel.setText("My Properties");
+            return;
+        }
+        myPropertiesTitleLabel.setText("My Properties  " + player.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN + " sets");
+    }
+
+    private int resolveCompleteSetCount(GameStateData.PlayerData playerData, PlayerManagement player) {
+        if (player != null) {
+            return player.getCompleteSetCount();
+        }
+        if (playerData == null || playerData.getPropertyZones() == null) {
+            return 0;
+        }
+        int sets = 0;
+        for (Map.Entry<Color, GameStateData.PropertyZoneData> entry : playerData.getPropertyZones().entrySet()) {
+            GameStateData.PropertyZoneData zoneData = entry.getValue();
+            int currentCount = zoneData == null || zoneData.getProperties() == null ? 0 : zoneData.getProperties().size();
+            int requiredCount = getRequiredPropertySetSize(entry.getKey());
+            if (requiredCount != Integer.MAX_VALUE && currentCount >= requiredCount) {
+                sets++;
+            }
+        }
+        return sets;
+    }
+
+    private int getRequiredPropertySetSize(Color color) {
+        if (color == null) {
+            return Integer.MAX_VALUE;
+        }
+        return switch (color) {
+            case BROWN, DARK_BLUE, UTILITY -> 2;
+            case LIGHT_BLUE, PINK, ORANGE, RED, YELLOW, GREEN -> 3;
+            case RAILROAD -> 4;
+            default -> Integer.MAX_VALUE;
+        };
     }
 
     private void installLabelTooltip(Label label, String text) {
