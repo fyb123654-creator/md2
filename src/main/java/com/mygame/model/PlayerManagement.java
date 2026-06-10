@@ -410,7 +410,7 @@ public class PlayerManagement {
         List<Card> bankCopy = new ArrayList<>(bankCards);
         for (Card c : bankCopy) {
             if (removeFromBank(c)) {
-                collector.receiveAssetToTable(c);
+                collector.addToHand(c);
             }
         }
         List<Card> props = new ArrayList<>();
@@ -421,7 +421,7 @@ public class PlayerManagement {
         }
         for (Card c : props) {
             if (removeFromPropertyZones(c)) {
-                collector.receiveAssetToTable(c);
+                collector.addToHand(c);
             }
         }
     }
