@@ -22,7 +22,7 @@
                 <Label text="Online Lobby" styleClass="hero-title"/>
                 <Label text="Create a room, wait for everyone to get ready, and launch the match from a cleaner staging space." styleClass="hero-subtitle" wrapText="true"/>
                 <VBox spacing="8" styleClass="rules-card dark-rules-card">
-                    <Label text="Online Rules" styleClass="panel-title"/>
+                    <Label text="Online Rules" styleClass="panel-title" style="-fx-text-fill: rgba(255,255,255,0.94);"/>
                     <Label text="1. The host creates the room and chooses the room size." styleClass="rule-line" wrapText="true"/>
                     <Label text="2. All connected players should press Ready before the host starts." styleClass="rule-line" wrapText="true"/>
                     <Label text="3. The host starts only when every seat is filled and ready." styleClass="rule-line" wrapText="true"/>
