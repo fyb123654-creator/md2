@@ -516,7 +516,7 @@ public class GameManager {
         for (Card c : bankCards) {
             if (paid >= amount) break;
             if (payer.removeFromBank(c)) {
-                collector.receiveAssetToTable(c);
+                collector.addToHand(c);
                 paid += c.getValue();
             }
         }
@@ -532,7 +532,7 @@ public class GameManager {
             for (Card c : propCards) {
                 if (paid >= amount) break;
                 if (payer.removeFromPropertyZones(c)) {
-                    collector.receiveAssetToTable(c);
+                    collector.addToHand(c);
                     paid += c.getValue();
                 }
             }

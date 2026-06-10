@@ -283,8 +283,8 @@ public class ActionCardTest {
 
         // Bob should have lost the 10M card from bank
         assertEquals(0, bob.getBankCardsView().size());
-        assertEquals(aliceHandBefore - 1, alice.getHandCardCount());
-        assertTrue(alice.getBankCardsView().stream().anyMatch(c -> "b10".equals(c.getId())));
+        assertEquals(aliceHandBefore, alice.getHandCardCount());
+        assertTrue(alice.getHandCardsView().stream().anyMatch(c -> "b10".equals(c.getId())));
     }
 
     // ====================================================================
@@ -333,11 +333,11 @@ public class ActionCardTest {
 
         gm.playActionCard(findCardInHand(gm, ItsMyBirthdayCard.class));
 
-        // After charging both opponents, Alice should have gained cards in bank
+        // After charging both opponents, Alice should have gained cards in hand
         assertEquals(0, gm.getPlayersView().get(1).getBankTotalValue());
         assertEquals(0, gm.getPlayersView().get(2).getBankTotalValue());
-        assertEquals(aliceHandBefore - 1, alice.getHandCardCount());
-        assertTrue(alice.getBankCardsView().stream().anyMatch(c -> "b5".equals(c.getId())));
-        assertTrue(alice.getBankCardsView().stream().anyMatch(c -> "c5".equals(c.getId())));
+        assertEquals(aliceHandBefore + 1, alice.getHandCardCount());
+        assertTrue(alice.getHandCardsView().stream().anyMatch(c -> "b5".equals(c.getId())));
+        assertTrue(alice.getHandCardsView().stream().anyMatch(c -> "c5".equals(c.getId())));
     }
 }
