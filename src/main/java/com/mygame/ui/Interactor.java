@@ -15,6 +15,7 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.layout.VBox;
 import javafx.scene.control.ScrollPane;
+import javafx.stage.WindowEvent;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -121,30 +122,43 @@ public class Interactor implements GameInteractor {
         scrollPane.setPrefViewportHeight(420);
         dialog.getDialogPane().setContent(scrollPane);
 
-        Node confirmButton = dialog.getDialogPane().lookupButton(confirmButtonType);
+        boolean hasAnyAssets = !(bankCheckMap.isEmpty() && propertyCheckMap.isEmpty());
 
-        Runnable refreshSelectionState = () -> {
-            int total = 0;
-            for (Map.Entry<CheckBox, Card> e : bankCheckMap.entrySet()) {
-                if (e.getKey().isSelected()) total += e.getValue().getValue();
-            }
-            for (Map.Entry<CheckBox, Card> e : propertyCheckMap.entrySet()) {
-                if (e.getKey().isSelected()) total += e.getValue().getValue();
-            }
-            String status = total >= requiredAmount
-                    ? "Selected total: " + total + "M (enough to pay)"
-                    : "Selected total: " + total + "M (not enough, all assets will be taken)";
-            selectedAmountLabel.setText(status);
-            confirmButton.setDisable(total == 0);
-        };
+        // Defer button lookup and listener wiring until dialog is shown,
+        // so the confirm button is guaranteed to exist.
+        dialog.setOnShown(ev -> {
+            dialog.getDialogPane().getScene().getWindow().addEventFilter(
+                    WindowEvent.WINDOW_CLOSE_REQUEST, e -> e.consume());
 
-        for (CheckBox box : bankCheckMap.keySet()) {
-            box.selectedProperty().addListener((obs, oldV, newV) -> refreshSelectionState.run());
-        }
-        for (CheckBox box : propertyCheckMap.keySet()) {
-            box.selectedProperty().addListener((obs, oldV, newV) -> refreshSelectionState.run());
-        }
-        refreshSelectionState.run();
+            Node confirmButton = dialog.getDialogPane().lookupButton(confirmButtonType);
+            if (confirmButton == null) {
+                System.err.println("[PaymentDialog] confirmButton is null — cannot enforce payment selection");
+                return;
+            }
+
+            Runnable refreshSelectionState = () -> {
+                int total = 0;
+                for (Map.Entry<CheckBox, Card> e : bankCheckMap.entrySet()) {
+                    if (e.getKey().isSelected()) total += e.getValue().getValue();
+                }
+                for (Map.Entry<CheckBox, Card> e : propertyCheckMap.entrySet()) {
+                    if (e.getKey().isSelected()) total += e.getValue().getValue();
+                }
+                String status = total >= requiredAmount
+                        ? "Selected total: " + total + "M (enough to pay)"
+                        : "Selected total: " + total + "M (not enough, all assets will be taken)";
+                selectedAmountLabel.setText(status);
+                confirmButton.setDisable(hasAnyAssets && total == 0);
+            };
+
+            for (CheckBox box : bankCheckMap.keySet()) {
+                box.selectedProperty().addListener((obs, oldV, newV) -> refreshSelectionState.run());
+            }
+            for (CheckBox box : propertyCheckMap.keySet()) {
+                box.selectedProperty().addListener((obs, oldV, newV) -> refreshSelectionState.run());
+            }
+            refreshSelectionState.run();
+        });
 
         dialog.setResultConverter(buttonType -> {
             if (buttonType == confirmButtonType) {
