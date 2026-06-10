@@ -3727,18 +3727,15 @@ public class GameController {
     // Client-side handling for payment request
     public void handleRequirePayment(int amount, String collectorId) {
         PlayerManagement me = gameManager.getPlayersView().get(localPlayerIndex);
-        if (calculateAssetTotalValue(me) < amount) {
-            sendActionToServer("PAYMENT_RESPONSE:NONE");
-            return;
-        }
 
-        // 1) Ask player to select assets
+        // Always show the popup so the player can choose what to give up,
+        // even if they can't afford the full amount.
         List<Card> selectedAssets = interactor.showSelectableAssets(me, amount);
         if (selectedAssets == null || selectedAssets.isEmpty()) {
             selectedAssets = autoSelectAssetsForPayment(me, amount);
         }
 
-        // 2) Build card id list
+        // Build card id list
         StringBuilder response = new StringBuilder("PAYMENT_RESPONSE:");
         if (selectedAssets != null && !selectedAssets.isEmpty()) {
             for (int i = 0; i < selectedAssets.size(); i++) {

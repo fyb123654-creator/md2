@@ -644,23 +644,6 @@ public class GameServer {
         pendingPaymentJsnResponderId = victim.getPlayerId();
         pendingPaymentCanceledByJsn = false;
         if (findJustSayNoCard(victim) == null) {
-            // Auto-transfer if victim's total assets (bank + property) <= required amount
-            int totalAssets = victim.calculateAssetTotalValue();
-            if (totalAssets <= amount && totalAssets > 0) {
-                victim.transferAllAssetsTo(collector);
-                int batchAmount = pendingPaymentAmount; // Save before clear zeros it
-                clearSinglePaymentState();
-                // If in batch, advance to next victim; otherwise broadcast
-                if (pendingPaymentQueue != null && currentPaymentIndex < pendingPaymentQueue.size()) {
-                    pendingPaymentAmount = batchAmount; // Restore for next victim
-                    currentPaymentIndex++;
-                    processNextPaymentInBatch();
-                } else {
-                    clearBatchState();
-                    broadcastGameState();
-                }
-                return;
-            }
             // No JSN card — send payment popup
             isWaitingForJsn = false;
             isWaitingForPayment = true;
@@ -947,23 +930,15 @@ public class GameServer {
                 transferAllAssetsToCollectorHand(collector, victim);
             } else {
                 String[] ids = cardIds.split(",");
-                int selectedValue = 0;
                 List<Card> selectedCards = new ArrayList<>();
                 for (String id : ids) {
                     Card c = findAssetCardById(victim, id);
                     if (c != null) {
                         selectedCards.add(c);
-                        selectedValue += c.getValue();
                     }
                 }
-                if (selectedValue < pendingPaymentAmount) {
-                    send(NetworkProtocol.error("Selected payment is less than required"));
-                    NetworkProtocol req = new NetworkProtocol();
-                    req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
-                    req.setContent(pendingPaymentAmount + ":" + collector.getName());
-                    sendToPlayer(victim.getPlayerId(), req);
-                    return;
-                }
+                // Accept whatever the victim can pay; if total assets < required amount,
+                // the client-side popup already warned them and allowed any selection.
                 for (Card c : selectedCards) {
                     if (victim.removeFromBank(c) || victim.removeFromPropertyZones(c)) {
                         collector.addToHand(c);
@@ -996,20 +971,7 @@ public class GameServer {
                 return;
             }
 
-            // Auto-transfer if victim's total assets <= required amount
-            int totalAssets = victim.calculateAssetTotalValue();
-            if (totalAssets <= pendingPaymentAmount && totalAssets > 0) {
-                victim.transferAllAssetsTo(collector);
-                int batchAmount = pendingPaymentAmount;
-                clearSinglePaymentState();
-                if (pendingPaymentQueue != null) {
-                    pendingPaymentAmount = batchAmount;
-                }
-                continueBatchOrBroadcast();
-                return;
-            }
-
-            // Send payment popup instead of auto-paying
+            // Send payment popup
             isWaitingForJsn = false;
             isWaitingForPayment = true;
             NetworkProtocol req = new NetworkProtocol();

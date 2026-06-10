@@ -48,13 +48,6 @@ public class Interactor implements GameInteractor {
         activeDialog = dialog;
         dialog.setTitle("Select Assets");
         dialog.setHeaderText("Select assets of " + targetPlayer.getName() + " (multiple selection)");
-        final boolean[] allowDialogClose = {false};
-        dialog.setOnCloseRequest(event -> {
-            if (!allowDialogClose[0]) {
-                event.consume();
-            }
-        });
-
         ButtonType confirmButtonType = new ButtonType("Confirm", ButtonType.OK.getButtonData());
         dialog.getDialogPane().getButtonTypes().add(confirmButtonType);
 
@@ -129,14 +122,6 @@ public class Interactor implements GameInteractor {
         dialog.getDialogPane().setContent(scrollPane);
 
         Node confirmButton = dialog.getDialogPane().lookupButton(confirmButtonType);
-        confirmButton.setDisable(requiredAmount > 0);
-        confirmButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
-            if (confirmButton.isDisable()) {
-                event.consume();
-                return;
-            }
-            allowDialogClose[0] = true;
-        });
 
         Runnable refreshSelectionState = () -> {
             int total = 0;
@@ -146,10 +131,11 @@ public class Interactor implements GameInteractor {
             for (Map.Entry<CheckBox, Card> e : propertyCheckMap.entrySet()) {
                 if (e.getKey().isSelected()) total += e.getValue().getValue();
             }
-            selectedAmountLabel.setText(total >= requiredAmount
+            String status = total >= requiredAmount
                     ? "Selected total: " + total + "M (enough to pay)"
-                    : "Selected total: " + total + "M");
-            confirmButton.setDisable(total < requiredAmount);
+                    : "Selected total: " + total + "M (not enough, all assets will be taken)";
+            selectedAmountLabel.setText(status);
+            confirmButton.setDisable(false);
         };
 
         for (CheckBox box : bankCheckMap.keySet()) {
