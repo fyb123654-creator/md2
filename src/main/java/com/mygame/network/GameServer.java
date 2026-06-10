@@ -648,9 +648,11 @@ public class GameServer {
             int totalAssets = victim.calculateAssetTotalValue();
             if (totalAssets <= amount && totalAssets > 0) {
                 victim.transferAllAssetsTo(collector);
+                int batchAmount = pendingPaymentAmount; // Save before clear zeros it
                 clearSinglePaymentState();
                 // If in batch, advance to next victim; otherwise broadcast
                 if (pendingPaymentQueue != null && currentPaymentIndex < pendingPaymentQueue.size()) {
+                    pendingPaymentAmount = batchAmount; // Restore for next victim
                     currentPaymentIndex++;
                     processNextPaymentInBatch();
                 } else {
