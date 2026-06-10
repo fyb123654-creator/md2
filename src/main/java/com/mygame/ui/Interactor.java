@@ -148,7 +148,7 @@ public class Interactor implements GameInteractor {
                         ? "Selected total: " + total + "M (enough to pay)"
                         : "Selected total: " + total + "M (not enough, all assets will be taken)";
                 selectedAmountLabel.setText(status);
-                confirmButton.setDisable(hasAnyAssets && total == 0);
+                confirmButton.setDisable(total < requiredAmount);
             };
 
             for (CheckBox box : bankCheckMap.keySet()) {
