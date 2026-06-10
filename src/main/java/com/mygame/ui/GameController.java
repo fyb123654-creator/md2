@@ -1771,7 +1771,7 @@ public class GameController {
         bankRow.setAlignment(Pos.CENTER_LEFT);
         appendCardPreview(bankRow, player.getBankCardsView(), 3);
 
-        HBox propertyRow = new HBox(6);
+        FlowPane propertyRow = new FlowPane(6, 4);
         propertyRow.setAlignment(Pos.CENTER_LEFT);
         appendPropertySummary(propertyRow, player);
 
@@ -1797,7 +1797,7 @@ public class GameController {
         }
         appendCardPreview(bankRow, bankCards, 3);
 
-        HBox propertyRow = new HBox(6);
+        FlowPane propertyRow = new FlowPane(6, 4);
         propertyRow.setAlignment(Pos.CENTER_LEFT);
         appendPropertySummary(propertyRow, playerData, player);
 
@@ -1836,7 +1836,7 @@ public class GameController {
         return container;
     }
 
-    private VBox createCompactSection(String title, HBox contentRow) {
+    private VBox createCompactSection(String title, Pane contentRow) {
         VBox section = new VBox(6);
         section.getStyleClass().add("compact-section");
         Label label = new Label(title);
@@ -1858,7 +1858,7 @@ public class GameController {
         }
     }
 
-    private void appendPropertySummary(HBox row, PlayerManagement player) {
+    private void appendPropertySummary(Pane row, PlayerManagement player) {
         boolean hasProperty = false;
         for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
             Color color = entry.getKey();
@@ -1874,7 +1874,7 @@ public class GameController {
         }
     }
 
-    private void appendPropertySummary(HBox row, GameStateData.PlayerData playerData, PlayerManagement player) {
+    private void appendPropertySummary(Pane row, GameStateData.PlayerData playerData, PlayerManagement player) {
         boolean hasProperty = false;
         for (var entry : playerData.getPropertyZones().entrySet()) {
             Color color = entry.getKey();
