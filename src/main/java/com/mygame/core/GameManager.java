@@ -799,7 +799,7 @@ public class GameManager {
         }
     }
 
-    private void checkVictoryCondition() {
+    public void checkVictoryCondition() {
         if (winner != null) {
             return;
         }

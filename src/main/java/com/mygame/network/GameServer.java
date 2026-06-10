@@ -275,10 +275,11 @@ public class GameServer {
     }
 
     public void broadcastGameState() {
+        gameManager.checkVictoryCondition();
         GameStateData state = GameStateData.fromGameManager(gameManager);
         state.setTurnClockId(turnClockId);
         lastBroadcastState = state;
-        
+
         synchronized (clientsLock) {
             for (ClientHandler client : clientsByIndex.values()) {
                 if (client != null && client.isConnected() && client.isRegistered()) {
@@ -286,7 +287,7 @@ public class GameServer {
                 }
             }
         }
-        
+
         if (listener != null) listener.onStateChanged(state);
         if (gameManager.isGameOver()) {
             String winner = gameManager.getWinner().getName();
