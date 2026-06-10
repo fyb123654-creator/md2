@@ -644,7 +644,22 @@ public class GameServer {
         pendingPaymentJsnResponderId = victim.getPlayerId();
         pendingPaymentCanceledByJsn = false;
         if (findJustSayNoCard(victim) == null) {
-            // No JSN card — send payment popup instead of auto-paying
+            // Auto-transfer if victim's total assets (bank + property) <= required amount
+            int totalAssets = victim.calculateAssetTotalValue();
+            if (totalAssets <= amount && totalAssets > 0) {
+                victim.transferAllAssetsTo(collector);
+                clearSinglePaymentState();
+                // If in batch, advance to next victim; otherwise broadcast
+                if (pendingPaymentQueue != null && currentPaymentIndex < pendingPaymentQueue.size()) {
+                    currentPaymentIndex++;
+                    processNextPaymentInBatch();
+                } else {
+                    clearBatchState();
+                    broadcastGameState();
+                }
+                return;
+            }
+            // No JSN card — send payment popup
             isWaitingForJsn = false;
             isWaitingForPayment = true;
             NetworkProtocol req = new NetworkProtocol();
@@ -954,11 +969,15 @@ public class GameServer {
                 }
             }
 
+            // Save batch amount before clearing single-payment state (clear zeros pendingPaymentAmount)
+            int batchAmount = pendingPaymentAmount;
+
             // End single payment: clear waiting state only. Batch continuation handled below.
             clearSinglePaymentState();
 
             // If in batch payment, continue to next victim
             if (pendingPaymentQueue != null) {
+                pendingPaymentAmount = batchAmount; // Restore for next victim
                 currentPaymentIndex++;
                 processNextPaymentInBatch();
             } else {
@@ -971,6 +990,19 @@ public class GameServer {
             PlayerManagement victim = findPlayerById(pendingVictimId);
             if (collector == null || victim == null) {
                 clearSinglePaymentState();
+                continueBatchOrBroadcast();
+                return;
+            }
+
+            // Auto-transfer if victim's total assets <= required amount
+            int totalAssets = victim.calculateAssetTotalValue();
+            if (totalAssets <= pendingPaymentAmount && totalAssets > 0) {
+                victim.transferAllAssetsTo(collector);
+                int batchAmount = pendingPaymentAmount;
+                clearSinglePaymentState();
+                if (pendingPaymentQueue != null) {
+                    pendingPaymentAmount = batchAmount;
+                }
                 continueBatchOrBroadcast();
                 return;
             }
@@ -1158,14 +1190,22 @@ public class GameServer {
                     send(NetworkProtocol.error("Invalid card for Just Say No"));
                 }
                 if (pendingPaymentCanceledByJsn) {
+                    int batchAmount = pendingPaymentAmount;
                     clearSinglePaymentState();
+                    if (pendingPaymentQueue != null) {
+                        pendingPaymentAmount = batchAmount;
+                    }
                     continueBatchOrBroadcast();
                 } else {
                     resolvePaymentAfterJustSayNoDeclined();
                 }
             } else {
                 if (pendingPaymentCanceledByJsn) {
+                    int batchAmount = pendingPaymentAmount;
                     clearSinglePaymentState();
+                    if (pendingPaymentQueue != null) {
+                        pendingPaymentAmount = batchAmount;
+                    }
                     continueBatchOrBroadcast();
                 } else {
                     resolvePaymentAfterJustSayNoDeclined();
