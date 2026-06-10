@@ -374,19 +374,14 @@ public class GameController {
 
     private void applyExplicitImageSurfaces() {
         applyBackgroundImage(gameRootPane, "/images/background.png", "#f6f7fb");
-        applyBackgroundImage(feedPanel, "/images/ui/log-panel.png", "rgba(255,255,255,0.82)");
-        applyBackgroundImage(actionPanel, "/images/ui/action-panel.png", "rgba(255,255,255,0.82)");
         applyBackgroundImage(tableCenterPane, "/images/ui/table-surface.png", "rgba(18,42,72,0.78)");
         applyBackgroundImage(handDrawerScrollPane, "/images/ui/hand-surface.png", "rgba(255,255,255,0.18)");
-        installTextAreaSurface(logArea, "/images/ui/log-panel.png");
         Platform.runLater(() -> {
-    Node content = chatArea.lookup(".content");
-    if (content instanceof Region region) {
-        region.setStyle("-fx-background-color: transparent; -fx-background-radius: 12; -fx-border-radius: 12;");
-        applyRoundedClip(region, 12);
-    }
-});
-        Platform.runLater(() -> {
+            Node content = chatArea.lookup(".content");
+            if (content instanceof Region region) {
+                region.setStyle("-fx-background-color: transparent; -fx-background-radius: 12; -fx-border-radius: 12;");
+                applyRoundedClip(region, 12);
+            }
             applyRoundedClip(feedPanel, 18);
             applyRoundedClip(actionPanel, 18);
             applyTableSurfaceClip(tableCenterPane);

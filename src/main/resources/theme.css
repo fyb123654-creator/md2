@@ -496,18 +496,6 @@
   -fx-background-size: cover;
 }
 
-.action-panel {
-  -fx-alignment: top-center;
-}
-
-.feed-panel {
-  -fx-background-image: url("images/ui/log-panel.png");
-}
-
-.action-panel {
-  -fx-background-image: url("images/ui/action-panel.png");
-}
-
 .side-action {
   -fx-pref-width: 196;
   -fx-pref-height: 48;
@@ -547,18 +535,10 @@
 
 .chat-slot {
   -fx-background-color: transparent;
-  -fx-background-image: url("images/ui/chat-box.png");
-  -fx-background-position: center center;
-  -fx-background-repeat: no-repeat;
-  -fx-background-size: cover;
 }
 
 .action-slot {
   -fx-background-color: transparent;
-  -fx-background-image: url("images/ui/action-panel.png");
-  -fx-background-position: center center;
-  -fx-background-repeat: no-repeat;
-  -fx-background-size: cover;
 }
 
 .lobby-hero-slot {
