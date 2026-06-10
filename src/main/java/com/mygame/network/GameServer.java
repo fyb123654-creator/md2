@@ -644,14 +644,13 @@ public class GameServer {
         pendingPaymentJsnResponderId = victim.getPlayerId();
         pendingPaymentCanceledByJsn = false;
         if (findJustSayNoCard(victim) == null) {
-            executeAutomaticPayment(collector, victim, pendingPaymentAmount);
-            clearSinglePaymentState();
-            if (pendingPaymentQueue != null) {
-                currentPaymentIndex++;
-                processNextPaymentInBatch();
-            } else {
-                broadcastGameState();
-            }
+            // No JSN card — send payment popup instead of auto-paying
+            isWaitingForJsn = false;
+            isWaitingForPayment = true;
+            NetworkProtocol req = new NetworkProtocol();
+            req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
+            req.setContent(pendingPaymentAmount + ":" + collector.getName());
+            sendToPlayer(victim.getPlayerId(), req);
             return;
         }
         NetworkProtocol req = new NetworkProtocol();
@@ -976,10 +975,13 @@ public class GameServer {
                 return;
             }
 
-            executeAutomaticPayment(collector, victim, pendingPaymentAmount);
-            
-            clearSinglePaymentState();
-            continueBatchOrBroadcast();
+            // Send payment popup instead of auto-paying
+            isWaitingForJsn = false;
+            isWaitingForPayment = true;
+            NetworkProtocol req = new NetworkProtocol();
+            req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
+            req.setContent(pendingPaymentAmount + ":" + collector.getName());
+            sendToPlayer(victim.getPlayerId(), req);
         }
 
         private void continueBatchOrBroadcast() {
