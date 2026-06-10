@@ -127,9 +127,9 @@
                     <VBox fx:id="actionPanel" spacing="14" styleClass="overlay side-panel action-panel">
                         <Label text="Actions" styleClass="section-title"/>
                         <Label fx:id="timerLabel" text="180s" styleClass="timer-chip"/>
-                        <Button fx:id="navBackButton" text="Exit to Lobby" onAction="#onNavigateBackClicked" styleClass="button primary side-action"/>
-                        <Button fx:id="helpButton" text="Game Rules" onAction="#onHelpClicked" styleClass="button primary side-action"/>
                         <Button fx:id="endTurnButton" text="End Turn" onAction="#onEndTurnClicked" styleClass="button success side-action primary-side-action"/>
+                        <Button fx:id="helpButton" text="Game Rules" onAction="#onHelpClicked" styleClass="button primary side-action"/>
+                        <Button fx:id="navBackButton" text="Exit to Lobby" onAction="#onNavigateBackClicked" styleClass="button primary side-action"/>
                         <Button fx:id="discardModeButton" text="Discard" onAction="#onDiscardModeClicked" styleClass="button side-action"/>
                         <Label fx:id="loadingLabel" text="Waiting for player action" wrapText="true" styleClass="loading-label"/>
                     </VBox>

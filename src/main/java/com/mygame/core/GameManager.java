@@ -498,53 +498,46 @@ public class GameManager {
             throw new IllegalStateException("interactor is not set");
         }
 
-        if (tryCancelWithJustSayNo(payer, collector, "charge")) {
+        // 没钱就不收租了，且不再弹出支付选择框
+        int totalAssetValue = calculateAssetTotalValue(payer);
+        if (totalAssetValue <= 0) {
             return;
         }
 
-        int totalAssetValue = calculateAssetTotalValue(payer);
-
         if (totalAssetValue <= amount) {
-            transferAllAssetsToCollectorHand(collector, payer);
+            // transferAllAssetsToCollectorHand 不应该淘汰玩家（线下模式也要改一下）
+            payer.transferAllAssetsTo(collector);
             checkVictoryCondition();
             return;
         }
 
-        List<Card> selectedCards = interactor.showSelectableAssets(payer, amount);
-        if (selectedCards.isEmpty()) {
-            // Fallback: auto-pick assets to prevent evasion
-            selectedCards = new ArrayList<>();
-            int currentTotal = 0;
-            for (Card c : payer.getBankCardsView()) {
-                selectedCards.add(c);
-                currentTotal += c.getValue();
-                if (currentTotal >= amount) break;
+        int paid = 0;
+        List<Card> bankCards = new ArrayList<>(payer.getBankCardsView());
+        for (Card c : bankCards) {
+            if (paid >= amount) break;
+            if (payer.removeFromBank(c)) {
+                collector.receiveAssetToTable(c);
+                paid += c.getValue();
             }
-            if (currentTotal < amount) {
-                for (Map.Entry<Color, PropertyZone> entry : payer.getPropertyZonesView().entrySet()) {
-                    for (Card c : entry.getValue().getPropertiesView()) {
-                        selectedCards.add(c);
-                        currentTotal += c.getValue();
-                        if (currentTotal >= amount) break;
-                    }
-                    if (currentTotal >= amount) break;
+        }
+
+        if (paid < amount) {
+            List<Card> propCards = new ArrayList<>();
+            for (PropertyZone zone : payer.getPropertyZonesView().values()) {
+                if (zone.getPropertiesView() != null) propCards.addAll(zone.getPropertiesView());
+                if (zone.getHouse() != null) propCards.add(zone.getHouse());
+                if (zone.getHotel() != null) propCards.add(zone.getHotel());
+            }
+            propCards.sort(java.util.Comparator.comparingInt(Card::getValue));
+            for (Card c : propCards) {
+                if (paid >= amount) break;
+                if (payer.removeFromPropertyZones(c)) {
+                    collector.receiveAssetToTable(c);
+                    paid += c.getValue();
                 }
             }
         }
 
-        int selectedValue = 0;
-        for (Card card : selectedCards) {
-            selectedValue += card.getValue();
-        }
-        if (selectedValue < amount) {
-            throw new IllegalStateException("selected card total value is less than required amount");
-        }
-
-        for (Card card : selectedCards) {
-            if (payer.removeFromBank(card) || payer.removeFromPropertyZones(card)) {
-                collector.receiveAssetToTable(card);
-            }
-        }
         checkVictoryCondition();
     }
 
@@ -743,6 +736,7 @@ public class GameManager {
 
     private void transferAllAssetsToCollectorHand(PlayerManagement collector, PlayerManagement payer) {
         payer.transferAllAssetsTo(collector);
+        // 不再淘汰玩家
     }
 
     public void depositMoneyCard(Card card) {

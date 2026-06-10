@@ -594,6 +594,46 @@ public class GameServer {
         initiatePaymentAgainstVictim(collector, victim, pendingPaymentAmount, pendingActionName);
     }
 
+    private void executeAutomaticPayment(PlayerManagement collector, PlayerManagement victim, int amount) {
+        int totalAssetValue = victim.calculateAssetTotalValue();
+        if (totalAssetValue <= 0) {
+            return; // 没钱就不收租了
+        }
+        if (totalAssetValue <= amount) {
+            victim.transferAllAssetsTo(collector);
+            // 不再淘汰玩家
+            return;
+        }
+
+        int paid = 0;
+        // 优先用银行存款支付
+        List<Card> bankCards = new ArrayList<>(victim.getBankCardsView());
+        for (Card c : bankCards) {
+            if (paid >= amount) break;
+            victim.removeFromBank(c);
+            collector.addToHand(c);
+            paid += c.getValue();
+        }
+
+        // 存款不够，用房产支付
+        if (paid < amount) {
+            List<Card> propCards = new ArrayList<>();
+            for (PropertyZone zone : victim.getPropertyZonesView().values()) {
+                if (zone.getPropertiesView() != null) propCards.addAll(zone.getPropertiesView());
+                if (zone.getHouse() != null) propCards.add(zone.getHouse());
+                if (zone.getHotel() != null) propCards.add(zone.getHotel());
+            }
+            // 简单排序，先用价值小的
+            propCards.sort(Comparator.comparingInt(Card::getValue));
+            for (Card c : propCards) {
+                if (paid >= amount) break;
+                victim.removeFromPropertyZones(c);
+                collector.addToHand(c);
+                paid += c.getValue();
+            }
+        }
+    }
+
     private void initiatePaymentAgainstVictim(PlayerManagement collector, PlayerManagement victim, int amount, String actionName) {
         isWaitingForJsn = true;
         isWaitingForPayment = false;
@@ -604,27 +644,13 @@ public class GameServer {
         pendingPaymentJsnResponderId = victim.getPlayerId();
         pendingPaymentCanceledByJsn = false;
         if (findJustSayNoCard(victim) == null) {
-            int totalAssetValue = victim.calculateAssetTotalValue();
-            if (totalAssetValue <= pendingPaymentAmount) {
-                victim.transferAllAssetsTo(collector);
-                int victimIndex = findPlayerIndexById(victim.getPlayerId());
-                if (victimIndex >= 0) {
-                    gameManager.eliminatePlayer(victimIndex);
-                }
-                clearSinglePaymentState();
-                if (pendingPaymentQueue != null) {
-                    currentPaymentIndex++;
-                    processNextPaymentInBatch();
-                } else {
-                    broadcastGameState();
-                }
+            executeAutomaticPayment(collector, victim, pendingPaymentAmount);
+            clearSinglePaymentState();
+            if (pendingPaymentQueue != null) {
+                currentPaymentIndex++;
+                processNextPaymentInBatch();
             } else {
-                isWaitingForJsn = false;
-                isWaitingForPayment = true;
-                NetworkProtocol req = new NetworkProtocol();
-                req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
-                req.setContent(pendingPaymentAmount + ":" + collector.getName());
-                sendToPlayer(pendingVictimId, req);
+                broadcastGameState();
             }
             return;
         }
@@ -950,20 +976,10 @@ public class GameServer {
                 return;
             }
 
-            int totalAssetValue = calculateAssetTotalValue(victim);
-            if (totalAssetValue <= pendingPaymentAmount) {
-                transferAllAssetsToCollectorHand(collector, victim);
-                clearSinglePaymentState();
-                continueBatchOrBroadcast();
-                return;
-            }
-
-            isWaitingForJsn = false;
-            isWaitingForPayment = true;
-            NetworkProtocol req = new NetworkProtocol();
-            req.setType(NetworkProtocol.MessageType.REQUIRE_PAYMENT);
-            req.setContent(pendingPaymentAmount + ":" + collector.getName());
-            sendToPlayer(pendingVictimId, req);
+            executeAutomaticPayment(collector, victim, pendingPaymentAmount);
+            
+            clearSinglePaymentState();
+            continueBatchOrBroadcast();
         }
 
         private void continueBatchOrBroadcast() {
@@ -981,10 +997,7 @@ public class GameServer {
 
         private void transferAllAssetsToCollectorHand(PlayerManagement collector, PlayerManagement victim) {
             victim.transferAllAssetsTo(collector);
-            int victimIndex = findPlayerIndexById(victim.getPlayerId());
-            if (victimIndex >= 0) {
-                gameManager.eliminatePlayer(victimIndex);
-            }
+            // 不再淘汰玩家
         }
 
         private void handleToggleReady(String content) {
