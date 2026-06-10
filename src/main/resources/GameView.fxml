@@ -80,7 +80,9 @@
                                                 </VBox>
                                                 <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card">
                                                     <Label text="Property" styleClass="zone-label"/>
-                                                    <FlowPane fx:id="tableCurrentPropertyBox" hgap="8" vgap="8" prefWrapLength="140"/>
+                                                    <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" prefViewportHeight="80" styleClass="zone-scroll">
+                                                        <FlowPane fx:id="tableCurrentPropertyBox" hgap="8" vgap="8" prefWrapLength="116"/>
+                                                    </ScrollPane>
                                                 </VBox>
                                                 <VBox spacing="6" alignment="TOP_CENTER" styleClass="table-zone-card action-zone-card">
                                                     <Label text="Action" styleClass="zone-label"/>
