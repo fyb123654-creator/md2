@@ -2548,15 +2548,21 @@ public class GameController {
         }
 
 
-        // 4) Send action to server with rent mode + optional double card id
+        // 4) For wild rent, choose target BEFORE animation (so cancel doesn't leave ghost card)
+        String targetPlayerId = null;
+        if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
+            PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
+            if (targetPlayer == null) return;
+            targetPlayerId = targetPlayer.getPlayerId();
+        }
+
+        // 5) Send action to server with rent mode + optional double card id
         String finalDoubleCardId = doubleCardId;
+        String finalTargetPlayerId = targetPlayerId;
         animateHandCardToDiscard(rentCard, () -> {
             if (rentCard.getCardType() == CardType.RENT_WILDCOLOR) {
-                // Wild rent targets a single player
-                PlayerManagement targetPlayer = interactor.choiceTargetPlayer(currentPlayer, gameManager.getPlayersView());
-                if (targetPlayer == null) return;
                 // PLAY_ACTION:<rentId>:WILD_RENT:<color>:<targetPlayerId>:<doubleCardId>
-                sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":WILD_RENT:" + selectedColor.name() + ":" + targetPlayer.getPlayerId() + ":" + finalDoubleCardId);
+                sendActionToServer("PLAY_ACTION:" + rentCard.getId() + ":WILD_RENT:" + selectedColor.name() + ":" + finalTargetPlayerId + ":" + finalDoubleCardId);
             } else {
                 // Bi-color rent targets all opponents:
                 // PLAY_ACTION:<rentId>:BI_RENT:<color>:<doubleCardId>
