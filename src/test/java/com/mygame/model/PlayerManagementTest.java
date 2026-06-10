@@ -57,6 +57,32 @@ public class PlayerManagementTest {
     }
 
     @Test
+    void isSetComplete_orange_requiresThreeProperties() {
+        PlayerManagement player = new PlayerManagement("p1", "Alice");
+        player.addProperty(Color.ORANGE, new StandardPropertyCard("o1", "St. James Place", 2, Color.ORANGE, Map.of(1, 1, 2, 3, 3, 5)));
+        player.addProperty(Color.ORANGE, new StandardPropertyCard("o2", "Tennessee Avenue", 2, Color.ORANGE, Map.of(1, 1, 2, 3, 3, 5)));
+        assertFalse(player.isSetComplete(Color.ORANGE));
+
+        player.addProperty(Color.ORANGE, new StandardPropertyCard("o3", "New York Avenue", 2, Color.ORANGE, Map.of(1, 1, 2, 3, 3, 5)));
+        assertTrue(player.isSetComplete(Color.ORANGE));
+    }
+
+    @Test
+    void addBuilding_onOrangeCompleteSet_succeeds() {
+        PlayerManagement player = new PlayerManagement("p1", "Alice");
+        player.addProperty(Color.ORANGE, new StandardPropertyCard("o1", "St. James Place", 2, Color.ORANGE, Map.of(1, 1, 2, 3, 3, 5)));
+        player.addProperty(Color.ORANGE, new StandardPropertyCard("o2", "Tennessee Avenue", 2, Color.ORANGE, Map.of(1, 1, 2, 3, 3, 5)));
+        player.addProperty(Color.ORANGE, new StandardPropertyCard("o3", "New York Avenue", 2, Color.ORANGE, Map.of(1, 1, 2, 3, 3, 5)));
+
+        BuildingCard house = new BuildingCard("h1", "House", 3, 3);
+        player.addBuilding(Color.ORANGE, house);
+
+        assertNotNull(player.getPropertyZonesView().get(Color.ORANGE).getHouse());
+        assertTrue(player.isSetComplete(Color.ORANGE));
+        assertEquals(8, player.getRent(Color.ORANGE)); // 3 props base=5 + house=3
+    }
+
+    @Test
     void getRent_includesBuildingAddedValues() {
         PlayerManagement player = new PlayerManagement("p1", "Alice");
         player.addProperty(Color.BROWN, new StandardPropertyCard("b1", "Baltic", 1, Color.BROWN, Map.of(1, 1, 2, 2)));

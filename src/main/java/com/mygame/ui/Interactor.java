@@ -135,7 +135,7 @@ public class Interactor implements GameInteractor {
                     ? "Selected total: " + total + "M (enough to pay)"
                     : "Selected total: " + total + "M (not enough, all assets will be taken)";
             selectedAmountLabel.setText(status);
-            confirmButton.setDisable(false);
+            confirmButton.setDisable(total == 0);
         };
 
         for (CheckBox box : bankCheckMap.keySet()) {
@@ -336,9 +336,31 @@ public class Interactor implements GameInteractor {
         for (Map.Entry<Color, PropertyZone> entry : player.getPropertyZonesView().entrySet()) {
             Color color = entry.getKey();
             PropertyZone zone = entry.getValue();
-            if (!player.isSetComplete(color)) continue;
-            if (isHouse && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() != null)) continue;
-            if (isHotel && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() == null || zone.getHotel() != null)) continue;
+            int propCount = zone.getPropertiesView().size();
+            int requiredSize = player.getRequiredSetSize(color);
+            boolean complete = player.isSetComplete(color);
+
+            System.err.println("[BuildingDialog] zone=" + color.name()
+                    + " props=" + propCount
+                    + " required=" + requiredSize
+                    + " complete=" + complete
+                    + " hasHouse=" + (zone.getHouse() != null)
+                    + " hasHotel=" + (zone.getHotel() != null)
+                    + " isHouse=" + isHouse
+                    + " isHotel=" + isHotel);
+
+            if (!complete) {
+                System.err.println("[BuildingDialog]   SKIP: set not complete (" + propCount + "<" + requiredSize + ")");
+                continue;
+            }
+            if (isHouse && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() != null)) {
+                System.err.println("[BuildingDialog]   SKIP: house on " + color.name() + " (RR/UT=" + (color == Color.RAILROAD || color == Color.UTILITY) + " hasHouse=" + (zone.getHouse() != null) + ")");
+                continue;
+            }
+            if (isHotel && (color == Color.RAILROAD || color == Color.UTILITY || zone.getHouse() == null || zone.getHotel() != null)) {
+                System.err.println("[BuildingDialog]   SKIP: hotel on " + color.name() + " (RR/UT=" + (color == Color.RAILROAD || color == Color.UTILITY) + " hasHouse=" + (zone.getHouse() != null) + " hasHotel=" + (zone.getHotel() != null) + ")");
+                continue;
+            }
 
             String label = "[" + color.name() + "] (properties: " + zone.getPropertiesView().size()
                     + (zone.getHouse() != null ? ", House" : "")
