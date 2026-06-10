@@ -124,7 +124,6 @@ public class GameApp extends Application {
         leftHero.setAlignment(Pos.TOP_LEFT);
         leftHero.getStyleClass().addAll("menu-card", "hero-image-panel");
         leftHero.setPrefWidth(520);
-        applyPanelBackground(leftHero, "/images/menu/menu-hero.png");
         VBox offlineRulesCard = createRulesCard(
                 "Offline Rules",
                 "1. Start a local match with 2 to 5 players.",
@@ -148,13 +147,10 @@ public class GameApp extends Application {
         Label panelCopy = new Label("Pick a name, choose an avatar, and move into offline or online play.");
         panelCopy.getStyleClass().add("panel-copy");
         panelCopy.setWrapText(true);
-        StackPane rightPanelArt = createPanelAccentSlot("/images/menu/menu-panel-art.png", 372, 150);
-        VBox.setVgrow(nameField, Priority.NEVER);
-
         Button exitBtn = createMenuActionButton("Exit Game", "danger");
         exitBtn.setOnAction(e -> javafx.application.Platform.exit());
 
-        rightPanel.getChildren().addAll(panelTitle, panelCopy, nameField, avatarLabel, avatarRow, singlePlayerBtn, onlineBtn, helpBtn, exitBtn, rightPanelArt);
+        rightPanel.getChildren().addAll(panelTitle, panelCopy, nameField, avatarLabel, avatarRow, singlePlayerBtn, onlineBtn, helpBtn, exitBtn);
 
         shell.getChildren().addAll(leftHero, rightPanel);
         root.getChildren().add(shell);
