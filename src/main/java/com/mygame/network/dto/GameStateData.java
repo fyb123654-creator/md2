@@ -90,6 +90,7 @@ public class GameStateData implements Serializable {
             newPd.setPlayerName(pd.getPlayerName());
             newPd.setAvatarId(pd.getAvatarId());
             newPd.setHandCardCount(pd.getHandCardCount());
+            newPd.setEliminated(pd.isEliminated());
             
             // Only include hand cards if this is the target player
             if (pd.getPlayerId().equals(playerId)) {
@@ -142,6 +143,7 @@ public class GameStateData implements Serializable {
         private Map<Color, PropertyZoneData> propertyZones;
         private int handCardCount;
         private int avatarId;
+        private boolean eliminated;
 
         public PlayerData() {
             this.handCards = new ArrayList<>();
@@ -155,6 +157,7 @@ public class GameStateData implements Serializable {
             data.playerName = player.getName();
             data.handCardCount = player.getHandCardCount();
             data.avatarId = player.getAvatarId();
+            data.eliminated = player.isEliminated();
             
             // Hand cards
             for (Card card : player.getHandCardsView()) {
@@ -189,6 +192,8 @@ public class GameStateData implements Serializable {
         public void setHandCardCount(int handCardCount) { this.handCardCount = handCardCount; }
         public int getAvatarId() { return avatarId; }
         public void setAvatarId(int avatarId) { this.avatarId = avatarId; }
+        public boolean isEliminated() { return eliminated; }
+        public void setEliminated(boolean eliminated) { this.eliminated = eliminated; }
     }
 
     /**

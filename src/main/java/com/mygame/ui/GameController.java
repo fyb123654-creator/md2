@@ -138,8 +138,6 @@ public class GameController {
     @FXML
     private Button navBackButton;
     @FXML
-    private Button mainMenuButton;
-    @FXML
     private Button discardModeButton;
     @FXML
     private Button handDrawerToggleButton;
@@ -153,8 +151,6 @@ public class GameController {
     private TextField chatInput;
     @FXML
     private Button sendChatButton;
-    @FXML
-    private Slider bgmVolumeSlider;
     @FXML
     private StackPane drawPilePane;
     @FXML
@@ -246,7 +242,6 @@ public class GameController {
             discardModeButton.setDisable(true);
         }
         installButtonGraphics();
-        installAudioControls();
         updateHandDrawerState();
         installScrollSupport();
         renderTablePlaceholder();
@@ -356,20 +351,9 @@ public class GameController {
         }
     }
 
-    @FXML
-    private void onReturnMainMenuClicked() {
-        cleanup();
-        if (gameApp == null) {
-            return;
-        }
-        gameApp.showMainMenu();
-    }
-
-
     private void installButtonGraphics() {
         installButtonGraphic(sendChatButton);
         installButtonGraphic(navBackButton);
-        installButtonGraphic(mainMenuButton);
         installButtonGraphic(helpButton);
         installButtonGraphic(endTurnButton);
         installButtonGraphic(discardModeButton);
@@ -494,33 +478,9 @@ public class GameController {
         node.setClip(clip);
     }
 
-    private void installAudioControls() {
-        if (bgmVolumeSlider == null) {
-            return;
-        }
-        bgmVolumeSlider.setBlockIncrement(5);
-        bgmVolumeSlider.setMajorTickUnit(25);
-        bgmVolumeSlider.setMinorTickCount(4);
-        bgmVolumeSlider.setSnapToTicks(false);
-        bgmVolumeSlider.valueProperty().addListener((obs, oldValue, newValue) -> {
-            if (gameApp != null) {
-                gameApp.setBgmVolume(newValue.doubleValue() / 100.0);
-            }
-        });
-        applyBgmControlState();
-    }
-
-    private void applyBgmControlState() {
-        if (bgmVolumeSlider == null || gameApp == null) {
-            return;
-        }
-        bgmVolumeSlider.setValue(gameApp.getBgmVolume() * 100.0);
-    }
-
     private void applyButtonClips() {
         applyButtonClip(sendChatButton, 18);
         applyButtonClip(navBackButton, 18);
-        applyButtonClip(mainMenuButton, 18);
         applyButtonClip(helpButton, 18);
         applyButtonClip(endTurnButton, 18);
         applyButtonClip(discardModeButton, 18);
@@ -631,9 +591,6 @@ public class GameController {
     private void refreshSideActions() {
         if (navBackButton != null) {
             navBackButton.setDisable(false);
-        }
-        if (mainMenuButton != null) {
-            mainMenuButton.setDisable(false);
         }
         if (helpButton != null) {
             helpButton.setDisable(false);
@@ -1183,7 +1140,6 @@ public class GameController {
 
     public void setGameApp(GameApp gameApp) {
         this.gameApp = gameApp;
-        applyBgmControlState();
     }
 
     public void cleanup() {
@@ -1235,7 +1191,7 @@ public class GameController {
         trackedTurnClockId = -1;
         displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
         if (navBackButton != null) {
-            navBackButton.setText(isOnlineMode ? "Exit to Lobby" : "Exit to Menu");
+            navBackButton.setText("Exit to Lobby");
         }
 
         // Offline: create local GameManager.
@@ -1312,7 +1268,7 @@ public class GameController {
         displayedTurnSeconds = TURN_TIME_LIMIT_SECONDS;
         localPlayerIndex = 0;
         if (navBackButton != null) {
-            navBackButton.setText("Exit to Menu");
+            navBackButton.setText("Exit to Lobby");
         }
 
         interactor = new Interactor();
@@ -1444,7 +1400,7 @@ public class GameController {
         this.isOnlineMode = online;
         this.localPlayerIndex = playerIndex;
         if (navBackButton != null) {
-            navBackButton.setText(online ? "Exit to Lobby" : "Exit to Menu");
+            navBackButton.setText("Exit to Lobby");
         }
 
         // Prevent the host from being blocked before the first GAME_STATE arrives.
@@ -1808,7 +1764,8 @@ public class GameController {
                 player.getAvatarId(),
                 player.getHandCardCount(),
                 player.getCompleteSetCount(),
-                isTurnPlayer
+                isTurnPlayer,
+                player.isEliminated()
         );
         HBox bankRow = new HBox(6);
         bankRow.setAlignment(Pos.CENTER_LEFT);
@@ -1828,7 +1785,8 @@ public class GameController {
                 playerData.getAvatarId(),
                 playerData.getHandCardCount(),
                 resolveCompleteSetCount(playerData, player),
-                isTurnPlayer
+                isTurnPlayer,
+                playerData.isEliminated()
         );
 
         HBox bankRow = new HBox(6);
@@ -1847,10 +1805,12 @@ public class GameController {
         return container;
     }
 
-    private VBox createCompactCardShell(String playerName, int avatarId, int handCount, int completeSetCount, boolean isTurnPlayer) {
+    private VBox createCompactCardShell(String playerName, int avatarId, int handCount, int completeSetCount, boolean isTurnPlayer, boolean isEliminated) {
         VBox container = new VBox(8);
         container.getStyleClass().addAll("player-card", "compact-player-card");
-        if (isTurnPlayer) {
+        if (isEliminated) {
+            container.setStyle("-fx-opacity: 0.5; -fx-background-color: #f0f0f0;");
+        } else if (isTurnPlayer) {
             container.getStyleClass().add("current-turn");
             installTurnPulse(container);
         }
@@ -1862,6 +1822,9 @@ public class GameController {
 
         VBox titleBox = new VBox(3);
         Label nameLabel = new Label(playerName == null || playerName.isBlank() ? "Player" : playerName);
+        if (isEliminated) {
+            nameLabel.setText(nameLabel.getText() + " (Eliminated)");
+        }
         nameLabel.getStyleClass().add("compact-player-name");
         nameLabel.setTextOverrun(OverrunStyle.CLIP);
         Label handLabel = new Label("Hand: " + handCount + " | Sets: " + completeSetCount + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
@@ -3555,7 +3518,8 @@ public class GameController {
             prefix = "You are: ";
         }
 
-        clientInfoLabel.setText(prefix + shownPlayer.getName() + " | Complete sets: " + shownPlayer.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
+        String eliminatedText = shownPlayer.isEliminated() ? " (Eliminated)" : "";
+        clientInfoLabel.setText(prefix + shownPlayer.getName() + eliminatedText + " | Complete sets: " + shownPlayer.getCompleteSetCount() + "/" + PlayerManagement.REQUIRED_COMPLETE_SETS_TO_WIN);
         renderAvatarInto(clientAvatarPane, shownPlayer.getAvatarId(), shownPlayer.getName(), 20);
     }
 
@@ -3576,7 +3540,7 @@ public class GameController {
         if (isOnlineMode) {
             gameApp.showOnlineLobby();
         } else {
-            gameApp.showMainMenu();
+            gameApp.showOfflineLobby();
         }
     }
 
@@ -3856,6 +3820,7 @@ public class GameController {
             GameStateData.PlayerData pData = state.getPlayers().get(i);
             PlayerManagement pm = gameManager.getPlayersView().get(i);
             pm.setAvatarId(pData.getAvatarId());
+            pm.setEliminated(pData.isEliminated());
 
             // Restore hand
             for (GameStateData.CardData cd : pData.getHandCards()) {

@@ -826,6 +826,12 @@
   -fx-border-radius: 999;
 }
 
+.global-volume-slider .track {
+  -fx-pref-width: 180 !important;
+  -fx-min-width: 180 !important;
+  -fx-max-width: 180 !important;
+}
+
 .slider .thumb {
   -fx-background-color: #ffffff;
   -fx-border-color: #3b82f6;

@@ -15,13 +15,17 @@ import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.AnchorPane;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.stage.Stage;
@@ -155,7 +159,7 @@ public class GameApp extends Application {
         shell.getChildren().addAll(leftHero, rightPanel);
         root.getChildren().add(shell);
 
-        Scene scene = new Scene(root, 1280, 760);
+        Scene scene = createSceneWithGlobalOverlay(root, 1280, 760);
         applyTheme(scene);
         primaryStage.setTitle("Monopoly Deal - Mode Selection");
         primaryStage.setScene(scene);
@@ -171,7 +175,7 @@ public class GameApp extends Application {
             controller.setGameApp(this);
             primaryStage.setOnCloseRequest(e -> controller.cleanup());
 
-            Scene scene = new Scene(root, 1440, 860);
+            Scene scene = createSceneWithGlobalOverlay(root, 1440, 860);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal");
             primaryStage.setScene(scene);
@@ -189,7 +193,7 @@ public class GameApp extends Application {
             OfflineLobbyController controller = view.getController();
             controller.setGameApp(this);
 
-            Scene scene = new Scene(root, 1220, 760);
+            Scene scene = createSceneWithGlobalOverlay(root, 1220, 760);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal - Offline Lobby");
             primaryStage.setScene(scene);
@@ -208,7 +212,7 @@ public class GameApp extends Application {
             controller.setGameApp(this);
             primaryStage.setOnCloseRequest(e -> controller.cleanup());
 
-            Scene scene = new Scene(root, 1440, 860);
+            Scene scene = createSceneWithGlobalOverlay(root, 1440, 860);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal - Offline Game");
             primaryStage.setScene(scene);
@@ -416,7 +420,7 @@ public class GameApp extends Application {
             
             primaryStage.setOnCloseRequest(e -> controller.cleanup());
 
-            Scene scene = new Scene(root, 1220, 760);
+            Scene scene = createSceneWithGlobalOverlay(root, 1220, 760);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal - Online");
             primaryStage.setScene(scene);
@@ -454,7 +458,7 @@ public class GameApp extends Application {
                 }
             }
 
-            Scene scene = new Scene(root, 1440, 860);
+            Scene scene = createSceneWithGlobalOverlay(root, 1440, 860);
             applyTheme(scene);
             primaryStage.setTitle("Monopoly Deal - Online Game");
             primaryStage.setScene(scene);
@@ -463,6 +467,48 @@ public class GameApp extends Application {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private Scene createSceneWithGlobalOverlay(Parent root, double width, double height) {
+        StackPane wrapper = new StackPane();
+        wrapper.getChildren().add(root);
+
+        // Global volume slider overlay
+        HBox volumeBox = new HBox(12);
+        volumeBox.setAlignment(Pos.CENTER);
+        volumeBox.setPadding(new Insets(8, 16, 8, 16));
+        volumeBox.setStyle("-fx-background-color: rgba(255, 255, 255, 0.9); -fx-background-radius: 25; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 6, 0, 0, 2);");
+
+        Label volLabel = new Label("♫");
+        volLabel.setStyle("-fx-font-size: 18px; -fx-text-fill: #333333; -fx-font-weight: bold;");
+
+        Slider volSlider = new Slider(0, 100, bgmVolume * 100);
+        volSlider.getStyleClass().add("global-volume-slider");
+        volSlider.setStyle("-fx-pref-width: 180; -fx-min-width: 180; -fx-max-width: 180;");
+        volSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            setBgmVolume(newVal.doubleValue() / 100.0);
+        });
+
+        // Use a strict clipping container to physically prevent any track overflow
+        Pane sliderContainer = new Pane(volSlider);
+        sliderContainer.setPrefSize(180, 24);
+        sliderContainer.setMinSize(180, 24);
+        sliderContainer.setMaxSize(180, 24);
+        Rectangle clip = new Rectangle(180, 24);
+        sliderContainer.setClip(clip);
+
+        volumeBox.getChildren().addAll(volLabel, sliderContainer);
+        
+        // Wrap in Group to absolutely prevent any layout stretching from StackPane/AnchorPane
+        javafx.scene.Group hudGroup = new javafx.scene.Group(volumeBox);
+        
+        // Place in Top-Right corner as requested, moved further down
+        StackPane.setAlignment(hudGroup, Pos.TOP_RIGHT);
+        StackPane.setMargin(hudGroup, new Insets(50, 20, 0, 0));
+
+        wrapper.getChildren().add(hudGroup);
+
+        return new Scene(wrapper, width, height);
     }
 
     private void applyTheme(Scene scene) {
